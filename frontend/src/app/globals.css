@@ -1,0 +1,53 @@
+/* This single line loads ALL of Tailwind CSS */
+@import "tailwindcss";
+
+/* 
+  @theme = Tailwind v4's way of defining custom values
+  Everything here becomes a Tailwind class you can use.
+  e.g., --color-primary-600: #2563EB → use as "bg-primary-600" or "text-primary-600"
+*/
+@theme {
+  /* Fonts — match them to the CSS variables from layout.tsx */
+  --font-heading: "Plus Jakarta Sans", sans-serif;
+  --font-inter: "Inter", sans-serif;
+
+  /* Brand blues — used for buttons, links, accents */
+  --color-primary-100: #DBEAFE;   /* Light blue for soft backgrounds */
+  --color-primary-600: #2563EB;   /* Main blue for buttons and CTAs */
+  --color-primary-900: #1E3A8A;   /* Dark navy for headings */
+
+  /* Grays — used for text, borders, backgrounds */
+  --color-text-primary: #0F172A;   /* Darkest — main text */
+  --color-text-secondary: #334155; /* Medium — secondary text */
+  --color-muted: #64748B;          /* Light — subtle/helper text */
+  --color-border: #CBD5E1;         /* Border color for cards/buttons */
+  --color-section-bg: #F1F5F9;     /* Light gray section backgrounds */
+
+  /* Status colors — only for badges/indicators, NOT decorative */
+  --color-success: #16A34A;
+  --color-success-bg: #DCFCE7;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FEF3C7;
+  --color-danger: #DC2626;
+  --color-danger-bg: #FEE2E2;
+}
+
+/* 
+  @layer base = styles that apply to raw HTML elements globally
+  Every <body>, <h1>, <h2>, etc. in the entire app gets these styles
+*/
+@layer base {
+  body {
+    font-family: var(--font-inter);           /* Inter for all body text */
+    color: var(--color-text-primary);          /* Dark text by default */
+    line-height: 1.6;                          /* Spacing between lines */
+    -webkit-font-smoothing: antialiased;       /* Smoother text rendering */
+  }
+
+  /* All headings use Plus Jakarta Sans automatically */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    line-height: 1.25;              /* Tighter line height for headings */
+    letter-spacing: -0.025em;       /* Slightly tighter letters (SPEC requirement) */
+  }
+}
