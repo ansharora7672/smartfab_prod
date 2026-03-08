@@ -51,3 +51,7 @@
     letter-spacing: -0.025em;       /* Slightly tighter letters (SPEC requirement) */
   }
 }
+
+html {
+  scroll-behavior: smooth;
+}
