@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.config import settings
+from app.routers import auth_router
 
 
 # ============================================================
@@ -67,7 +68,7 @@ app = FastAPI(
 # ============================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],         # Which frontends can call us (* = all, restrict in production)
+    allow_origins=["http://localhost:3000"],        # Which frontends can call us (* = all, restrict in production)
     allow_credentials=True,      # Allow cookies/auth headers
     allow_methods=["*"],         # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
     allow_headers=["*"],         # Allow all headers
@@ -85,3 +86,6 @@ async def health_check():
         "service": "SmartFab Lathe API",
         "environment": settings.APP_ENV
     }
+
+# Register routers
+app.include_router(auth_router)
