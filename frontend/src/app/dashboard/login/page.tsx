@@ -68,7 +68,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="admin@smartfab.com"
+                placeholder="Email"
                 className="w-full px-4 py-3 rounded-xl border border-border bg-section-bg text-text-primary text-sm placeholder:text-muted/50 focus:outline-none focus:border-primary-600 focus:ring-1 focus:ring-primary-600 transition-colors duration-300"
               />
             </div>

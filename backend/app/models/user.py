@@ -1,10 +1,3 @@
-"""
-User model - represents admin and staff users in the system.
-
-This is the foundation for authentication and authorization.
-All internal users (admins and staff) are stored here.
-"""
-
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
