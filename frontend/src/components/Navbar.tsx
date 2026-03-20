@@ -63,7 +63,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
         {/* LOGO */}
-        <Link href="/" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-0">
           {/* 
             next/image → Next.js optimized image component
             - Automatically lazy-loads (only loads when visible)
@@ -71,10 +71,10 @@ export default function Navbar() {
             - Prevents layout shift with width/height
           */}
           <Image
-            src="/SmartFab_FinalLogo.png"
+            src="/SmartFab_FinalLogo_version.png"
             alt="SmartFab Lathe"
-            width={40}
-            height={40}
+            width={80}
+            height={80}
             className="object-contain"
           />
           <div className="flex flex-col items-start leading-none">
