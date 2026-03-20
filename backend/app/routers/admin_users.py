@@ -2,17 +2,18 @@
 
 import secrets
 import string
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.user import User, UserRole  
 from sqlmodel import select
-# FIXED IMPORTS: Loading your exact security and database files!
+
 from app.services.auth import hash_password 
 from app.database import get_session
 from app.routers.auth import get_current_user
 from app.schemas.admin_users import UserCreateRequest, UserCreateResponse, UserListResponse, UserListItem, UserRoleUpdateRequest, UserStatusUpdateRequest
 import uuid as uuid_lib
 from datetime import datetime, timezone
+from app.services.emails import send_welcome_email
 
 
 
@@ -22,9 +23,11 @@ router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 @router.post("/", response_model=UserCreateResponse)
 async def create_staff_user(
     data: UserCreateRequest,
-    db: AsyncSession = Depends(get_session),              # Use your get_session
-    current_user: dict = Depends(get_current_user)        # Your get_current_user returns a dictionary!
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user)
 ):
+
     # Security Check: Ensure ONLY Admins can hit this endpoint
     # Your get_current_user returns {"id": "...", "email": "...", "role": "..."}
     if current_user.get("role") != UserRole.ADMIN.value:
@@ -47,6 +50,14 @@ async def create_staff_user(
     
     db.add(new_user)
     await db.commit()
+    # Send welcome email in background (doesn't block the response)
+    background_tasks.add_task(
+        send_welcome_email,
+        to_email=data.email.lower(),
+        full_name=data.full_name,
+        temp_password=temp_password,
+    )
+
     
     # Return the temporary password using the response schema
     return UserCreateResponse(

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
         env_file=".env",            
         env_file_encoding="utf-8" 
     )
+    RESEND_API_KEY: str
+    FRONTEND_URL: str
+
 
 
 settings = Settings()
