@@ -4,7 +4,7 @@ from sqlmodel import select
 
 from app.database import get_session
 from app.models import User, UserRole
-from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse
+from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse, ChangePasswordRequest
 from app.services.auth import hash_password, verify_password, create_access_token
 
 from fastapi.responses import JSONResponse
@@ -18,19 +18,12 @@ from app.config import settings
 # All routes in this file will start with /api/auth
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-
+# REGISTER USER
 @router.post("/register", response_model=UserResponse)
 async def register_user(
     data: UserRegister,
     session: AsyncSession = Depends(get_session)
 ):
-    """
-    Register a new admin or staff user.
-    
-    Depends(get_session) is dependency injection:
-    FastAPI automatically creates a database session,
-    passes it to this function, and closes it when done.
-    """
 
     # Check if email already exists
     statement = select(User).where(User.email == data.email)
@@ -57,19 +50,26 @@ async def register_user(
 
     return new_user
 
-
+# LOGIN USER. IT WILL SEND THE ACCESS TOKEN IN THE FORM OF HTTP-ONLY COOKIE. ALSO SEND THE USER INFO IN THE RESPONSE BODY.
 @router.post("/login")
 async def login_user(
     data: UserLogin,
     session: AsyncSession = Depends(get_session)
 ):
+    # Check if email exists
     statement = select(User).where(User.email == data.email)
     result = await session.execute(statement)
     user = result.scalar_one_or_none()
+    
+    # Check if email or password is correct
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Check if account is active
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+    
+    # Create access token
     token = create_access_token(
         user_id=str(user.id),
         email=user.email,
@@ -93,14 +93,9 @@ async def login_user(
     )
     return response
 
-    
-
+# GET CURRENT USER. IT WILL RETURN THE USER INFO FROM THE COOKIE.
 @router.get("/me")
 async def get_current_user(request: Request):
-    """
-    Returns the current user info from the cookie.
-    The frontend calls this on page load to check auth.
-    """
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -119,10 +114,36 @@ async def get_current_user(request: Request):
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-
+# LOGOUT USER. IT WILL DELETE THE ACCESS TOKEN FROM THE COOKIE.
 @router.post("/logout")
 async def logout_user():
-    """Clear the auth cookie."""
     response = JSONResponse(content={"message": "Logged out"})
     response.delete_cookie("access_token")
     return response
+
+# CHANGE PASSWORD
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user_dict: dict = Depends(get_current_user)
+):
+    # Fetch the actual User model from DB using the ID from the cookie
+    user_id = current_user_dict["id"]
+    statement = select(User).where(User.id == user_id)
+    result = await session.execute(statement)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verify their old (temporary) password is correct
+    if not verify_password(data.old_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+        
+    # Hash the NEW password and update the database!
+    user.hashed_password = hash_password(data.new_password)
+    session.add(user)
+    await session.commit()
+    
+    return {"message": "Password updated successfully!"}

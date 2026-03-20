@@ -1,9 +1,13 @@
 // Import the type that defines what SEO metadata looks like
 import type { Metadata } from "next";
 // Import Google Fonts — Next.js downloads these at build time (faster than loading from Google)
-import { Plus_Jakarta_Sans, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter, Geist } from "next/font/google";
 // Import our global CSS (Tailwind + custom colors)
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+
 
 // Set up heading font — Plus Jakarta Sans
 // "variable" creates a CSS variable we can use in Tailwind classes
@@ -60,7 +64,7 @@ export default function RootLayout({
 }>) {
   return (
     // We attach both font variables to <html> so all pages can use them
-    <html lang="en" className={`${plusJakartaSans.variable} ${inter.variable}`}>
+    <html lang="en" className={cn(plusJakartaSans.variable, inter.variable, "font-sans", geist.variable)}>
       {/* 
         font-inter = use Inter as default body font
         antialiased = makes text smoother on screens
