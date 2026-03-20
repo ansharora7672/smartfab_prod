@@ -2,6 +2,12 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+// 	createContext - A way to share data between components without passing it through every level\
+// 	useContext - A hook that lets read and subscribe to context
+// 	useState - A hook that lets add state to a component
+// 	useEffect - A hook that lets perform side effects in a component
+// 	ReactNode - A type that represents any valid React node
+
 interface AuthUser {
   id: string;
   email: string;

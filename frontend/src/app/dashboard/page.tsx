@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function DashboardHome() {
   const { user } = useAuth();
+  console.log(user);
 
   return (
     <div>
