@@ -9,5 +9,6 @@ instead of:
 
 from app.models.user import User, UserRole
 from app.models.availability import StaffAvailability
+from app.models.ticket import Ticket, TicketStatusEnum
 
-__all__ = ["User", "UserRole", "StaffAvailability"]
+__all__ = ["User", "UserRole", "StaffAvailability", "Ticket", "TicketStatusEnum"]
