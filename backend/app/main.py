@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.config import settings
-from app.routers import auth_router, admin_users_router
+from app.routers import auth_router, admin_users_router, availability_router
 
 
 # ============================================================
@@ -90,4 +90,5 @@ async def health_check():
 # Register routers
 app.include_router(auth_router)
 app.include_router(admin_users_router)
+app.include_router(availability_router)
 

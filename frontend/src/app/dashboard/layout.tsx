@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
-
+import Link from "next/link"; // <--- Next.js Best Practice Added Here
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout } = useAuth();
@@ -13,7 +13,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Close sidebar when navigating to a new page
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
@@ -39,23 +38,20 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
-  // Shared sidebar content — used in both mobile overlay and desktop fixed sidebar
   const sidebarContent = (
     <>
       {/* Branding */}
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
-<Image
-  src="/smartfab_white_logo.png"
-  alt="SmartFab Lathe"
-  width={40}
-  height={40}
-  className="object-contain flex-shrink-0 rounded-xl"
-/>
-
-
+          <Image
+            src="/smartfab_white_logo.png"
+            alt="SmartFab Lathe"
+            width={40}
+            height={40}
+            className="flex-shrink-0 object-contain rounded-xl"
+          />
           <div className="flex flex-col">
-            <span className="font-heading font-bold text-sm tracking-wider text-white">
+            <span className="text-sm font-bold tracking-wider text-white font-heading">
               SMARTFAB LATHE
             </span>
             <span className="text-[10px] text-white/40 font-medium tracking-wider">
@@ -65,9 +61,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation Layer */}
       <nav className="flex-1 p-4 space-y-1">
-        <a
+        <Link
           href="/dashboard"
           className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
             pathname === "/dashboard"
@@ -76,10 +72,23 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           }`}
         >
           Dashboard
-        </a>
+        </Link>
+        
+        {/* New Availability Tab for EVERYONE */}
+        <Link
+          href="/dashboard/availability"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/availability")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          My Availability
+        </Link>
 
+        {/* Admin Only Layer */}
         {user.role === "ADMIN" && (
-          <a
+          <Link
             href="/dashboard/staff"
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
               pathname === "/dashboard/staff"
@@ -88,7 +97,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             }`}
           >
             Staff Management
-          </a>
+          </Link>
         )}
       </nav>
 
@@ -99,59 +108,56 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-white/40">{user.role}</p>
         </div>
         <button
-  onClick={logout}
-  className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium text-[#DC2626] bg-white/5 border border-white/10 hover:bg-[#DC2626] hover:text-white hover:border-transparent transition-all duration-500 ease-out"
->
-  Sign Out
-</button>
-
+          onClick={logout}
+          className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium text-[#DC2626] bg-white/5 border border-white/10 hover:bg-[#DC2626] hover:text-white hover:border-transparent transition-all duration-500 ease-out"
+        >
+          Sign Out
+        </button>
       </div>
     </>
   );
 
   return (
-    <div className="min-h-screen bg-section-bg flex">
-
-      {/* MOBILE OVERLAY — dark backdrop that closes the sidebar when clicked */}
+    <div className="flex min-h-screen bg-section-bg">
+      {/* MOBILE OVERLAY */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* MOBILE SIDEBAR — slides in from the left */}
+      {/* MOBILE SIDEBAR */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Close button inside mobile sidebar */}
         <button
           onClick={() => setSidebarOpen(false)}
-          className="absolute top-5 right-4 text-white/50 hover:text-white"
+          className="absolute text-white/50 top-5 right-4 hover:text-white"
         >
           <X className="w-5 h-5" />
         </button>
         {sidebarContent}
       </aside>
 
-      {/* DESKTOP SIDEBAR — always visible, fixed */}
-      <aside className="hidden lg:flex w-64 bg-primary-900 text-white flex-col fixed h-screen">
+      {/* DESKTOP SIDEBAR */}
+      <aside className="fixed flex-col hidden h-screen text-white lg:flex w-64 bg-primary-900">
         {sidebarContent}
       </aside>
 
       {/* MAIN AREA */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
-        {/* MOBILE TOP BAR — only visible on small screens */}
-        <header className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-border sticky top-0 z-30">
+      <div className="flex flex-col flex-1 min-h-screen lg:ml-64">
+        {/* MOBILE TOP BAR */}
+        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border">
           <button onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5 text-text-primary" />
           </button>
-          <span className="font-heading font-bold text-sm tracking-wider text-primary-900">
+          <span className="text-sm font-bold tracking-wider font-heading text-primary-900">
             SMARTFAB LATHE
           </span>
-          <div className="w-5" /> {/* Spacer to center the title */}
+          <div className="w-5" />
         </header>
 
         <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
