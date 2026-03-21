@@ -8,7 +8,6 @@ instead of:
 """
 
 from app.models.user import User, UserRole
-from app.models.ticket import Ticket, TicketStatus
 from app.models.availability import StaffAvailability
 
-__all__ = ["User", "UserRole", "Ticket", "TicketStatus", "StaffAvailability"]
+__all__ = ["User", "UserRole", "StaffAvailability"]
