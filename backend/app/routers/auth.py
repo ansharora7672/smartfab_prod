@@ -4,7 +4,7 @@ from sqlmodel import select
 
 from app.database import get_session
 from app.models import User, UserRole
-from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse, ChangePasswordRequest
+from app.schemas.auth import UserLogin, TokenResponse, UserResponse, ChangePasswordRequest
 from app.services.auth import hash_password, verify_password, create_access_token
 
 from fastapi.responses import JSONResponse
@@ -13,42 +13,51 @@ from fastapi.responses import JSONResponse
 from jose import jwt
 from app.config import settings
 
+# THE REAL DEPENDENCY — other routers import THIS
+async def get_current_user(
+    request: Request,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    This is a DEPENDENCY, not a route.
+    
+    Why separate from the /me route?
+    - A dependency is injected by FastAPI into any endpoint that does Depends(get_current_user)
+    - It returns the ACTUAL User object from the database, not just a dict
+    - This means we can check is_active, get full_name, etc.
+    - If the user was deactivated after login, this catches it immediately
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Actually fetch the user from database — this is the key difference!
+    user_id = payload.get("sub")
+    statement = select(User).where(User.id == user_id)
+    result = await session.execute(statement)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account deactivated")
+    
+    return user  # Returns the REAL User model object!
+
 
 # Create a router with prefix /api/auth
 # All routes in this file will start with /api/auth
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-
-# REGISTER USER
-@router.post("/register", response_model=UserResponse)
-async def register_user(
-    data: UserRegister,
-    session: AsyncSession = Depends(get_session)
-):
-
-    # Check if email already exists
-    statement = select(User).where(User.email == data.email)
-    result = await session.execute(statement)
-    existing_user = result.scalar_one_or_none()
-
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-
-    # Create new user with hashed password
-    new_user = User(
-        email=data.email,
-        hashed_password=hash_password(data.password),
-        full_name=data.full_name,
-        role=UserRole(data.role),
-    )
-
-    session.add(new_user)
-    await session.commit()
-    await session.refresh(new_user)
-
-    return new_user
 
 # LOGIN USER. IT WILL SEND THE ACCESS TOKEN IN THE FORM OF HTTP-ONLY COOKIE. ALSO SEND THE USER INFO IN THE RESPONSE BODY.
 @router.post("/login")
@@ -93,26 +102,20 @@ async def login_user(
     )
     return response
 
-# GET CURRENT USER. IT WILL RETURN THE USER INFO FROM THE COOKIE.
+# GET CURRENT USER INFO — Frontend calls this on every page load to check "am I logged in?"
 @router.get("/me")
-async def get_current_user(request: Request):
-    token = request.cookies.get("access_token")
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
-        )
-        return {
-            "id": payload["sub"],
-            "email": payload["email"],
-            "role": payload["role"],
-        }
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """
+    This ROUTE uses the get_current_user DEPENDENCY above.
+    The dependency does the heavy lifting (JWT decode + DB fetch + is_active check).
+    This route just formats the response for the frontend.
+    """
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role.value,
+    }
 
 # LOGOUT USER. IT WILL DELETE THE ACCESS TOKEN FROM THE COOKIE.
 @router.post("/logout")
@@ -122,28 +125,21 @@ async def logout_user():
     return response
 
 # CHANGE PASSWORD
+# Now that get_current_user returns the REAL User object from DB,
+# we don't need to fetch the user again! The dependency already did it.
 @router.post("/change-password")
 async def change_password(
     data: ChangePasswordRequest,
     session: AsyncSession = Depends(get_session),
-    current_user_dict: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    # Fetch the actual User model from DB using the ID from the cookie
-    user_id = current_user_dict["id"]
-    statement = select(User).where(User.id == user_id)
-    result = await session.execute(statement)
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
     # Verify their old (temporary) password is correct
-    if not verify_password(data.old_password, user.hashed_password):
+    if not verify_password(data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect old password")
         
     # Hash the NEW password and update the database!
-    user.hashed_password = hash_password(data.new_password)
-    session.add(user)
+    current_user.hashed_password = hash_password(data.new_password)
+    session.add(current_user)
     await session.commit()
     
     return {"message": "Password updated successfully!"}

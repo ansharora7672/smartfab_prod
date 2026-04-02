@@ -1,5 +1,6 @@
 # this file is for admin users which allows them to use the staff_management feature in the UI.
 
+import uuid
 import secrets
 import string
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
@@ -11,7 +12,6 @@ from app.services.auth import hash_password
 from app.database import get_session
 from app.routers.auth import get_current_user
 from app.schemas.admin_users import UserCreateRequest, UserCreateResponse, UserListResponse, UserListItem, UserRoleUpdateRequest, UserStatusUpdateRequest
-import uuid as uuid_lib
 from datetime import datetime, timezone
 from app.services.emails import send_welcome_email
 
@@ -25,15 +25,24 @@ async def create_staff_user(
     data: UserCreateRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
 
     # Security Check: Ensure ONLY Admins can hit this endpoint
-    # Your get_current_user returns {"id": "...", "email": "...", "role": "..."}
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Not authorized. Admin access required."
+        )
+    
+    # Check if email already exists in the system (Fix 3: prevents 500 crash on duplicates)
+    existing = await db.execute(
+        select(User).where(User.email == data.email.lower())
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists."
         )
     
     # Generate a secure 12-character temporary password
@@ -71,10 +80,10 @@ async def create_staff_user(
 @router.get("/", response_model=UserListResponse)
 async def get_all_users(
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     # Security Check: Only admins can see the full user list
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized. Admin access required."
@@ -102,20 +111,20 @@ async def get_all_users(
 # endpoint to change a user's role (Admin only)
 @router.patch("/{user_id}/role")
 async def update_user_role(
-    user_id: uuid_lib.UUID,
+    user_id: uuid.UUID,
     data: UserRoleUpdateRequest,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     # Security Check
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized. Admin access required."
         )
 
     # Prevent admin from changing their own role (safety check)
-    if current_user.get("id") == str(user_id):
+    if current_user.id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot change your own role."
@@ -152,19 +161,19 @@ async def update_user_role(
 # endpoint to activate/deactivate a user (Admin only)
 @router.patch("/{user_id}/status")
 async def update_user_status(
-    user_id: uuid_lib.UUID,
+    user_id: uuid.UUID,
     data: UserStatusUpdateRequest,
     db: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     # Security Check
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized. Admin access required."
         )
     # Prevent admin from deactivating themselves
-    if current_user.get("id") == str(user_id):
+    if current_user.id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own account."
