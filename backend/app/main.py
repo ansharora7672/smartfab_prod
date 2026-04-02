@@ -22,6 +22,9 @@ from app.database import init_db, bootstrap_admin
 from app.config import settings
 from app.routers import auth_router, admin_users_router, availability_router, ticket_router
 
+# Start our background email scheduler!
+from app.services.scheduler import start_scheduler, stop_scheduler
+
 
 # ============================================================
 # LIFESPAN — Startup & Shutdown Events
@@ -42,11 +45,14 @@ async def lifespan(app: FastAPI):
     await init_db()  # Create database tables
     print(" Database tables initialized")
     await bootstrap_admin()  # Create first admin if DB is empty
+    
+    start_scheduler()
 
     yield  # App is running and handling requests here
 
     # --- SHUTDOWN ---
     print(" Shutting down SmartFab Lathe API")
+    stop_scheduler()
 
 
 # ============================================================

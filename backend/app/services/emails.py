@@ -101,8 +101,7 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
         # starttls() = "Start Transport Layer Security" — encrypts the connection
         #              so your App Password travels safely over the internet
         # ---------------------------------------------------------------
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()  # Upgrade to encrypted connection
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
             server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
             server.send_message(msg)
 
@@ -111,4 +110,87 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
 
     except Exception as e:
         print(f"  [EMAIL ERROR] Failed to send welcome email to {to_email}: {e}")
+        return False
+
+def send_ticket_lifecycle_notification(to_email: str, notification_type: str, context: dict) -> bool:
+    """
+    Sends automated lifecycle emails for a Ticket to the assigned Staff Member.
+    expected context = {"user": User, "ticket": Ticket}
+    """
+    user = context.get("user")
+    ticket = context.get("ticket")
+    
+    if notification_type == "NEW_TICKET_ALERT":
+        subject = f"New Consultation Request: {ticket.ticket_id}"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
+                <p>Hi <strong>{user.full_name}</strong>,</p>
+                <p>A new customer has just requested a quote and scheduled a consultation.</p>
+                <p><strong>Ticket ID:</strong> {ticket.ticket_id}</p>
+                <p><strong>Customer:</strong> {ticket.customer_name} ({ticket.company_name})</p>
+                <p><strong>Scheduled For:</strong> {ticket.consultation_date} at {ticket.consultation_time}</p>
+                <p>Please log in to the portal to claim this ticket if you are available.</p>
+            </div>
+        </div>
+        """
+        
+    elif notification_type == "ASSIGNED":
+        subject = f"New Consultation Assigned: {ticket.ticket_id}"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
+                <p>Hi <strong>{user.full_name}</strong>,</p>
+                <p>You have been automatically assigned to handle an upcoming consultation call.</p>
+                <p><strong>Ticket ID:</strong> {ticket.ticket_id}</p>
+                <p><strong>Customer:</strong> {ticket.customer_name} ({ticket.company_name})</p>
+                <p><strong>Scheduled For:</strong> {ticket.consultation_date} at {ticket.consultation_time}</p>
+            </div>
+        </div>
+        """
+        
+    elif notification_type == "UPCOMING_REMINDER":
+        subject = f"Reminder: Upcoming Consultation {ticket.ticket_id} in 1 Hour!"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
+                <p>Hi <strong>{user.full_name}</strong>,</p>
+                <p>Friendly reminder that your consultation call for <strong>{ticket.ticket_id}</strong> is coming up in approximately 1 hour.</p>
+                <p><strong>Customer:</strong> {ticket.customer_name} ({ticket.company_name})</p>
+                <p><strong>Phone:</strong> {ticket.phone_number}</p>
+            </div>
+        </div>
+        """
+        
+    elif notification_type == "CALL_COMPLETED_PROMPT":
+        subject = f"Action Required: Complete Consultation {ticket.ticket_id}"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            <div style="background: #FEF3C7; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
+                <p>Hi <strong>{user.full_name}</strong>,</p>
+                <p>The scheduled time for ticket <strong>{ticket.ticket_id}</strong> has passed.</p>
+                <p>After your call concludes, please log into the dashboard and safely click <strong>Mark Call Completed</strong> so we can begin Quote Preparation.</p>
+            </div>
+        </div>
+        """
+    else:
+        print(f"  [EMAIL ERROR] Unknown notification type sent: {notification_type}")
+        return False
+        
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Lifecycle notification ({notification_type}) sent to {to_email}")
+        return True
+
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Failed to send {notification_type} to {to_email}: {e}")
         return False
