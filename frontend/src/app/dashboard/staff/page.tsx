@@ -119,8 +119,23 @@ export default function StaffManagementPage() {
         }),
       });
       if (!response.ok) {
-        const err = await response.json();
-        setCreateError(err.detail || "Failed to create user. Please try again.");
+        let errorMessage = "Failed to create user. Please try again.";
+        try {
+          const err = await response.json();
+          if (typeof err.detail === "string") {
+            errorMessage = err.detail;
+          } else if (Array.isArray(err.detail)) {
+            // FastAPI validation errors are arrays
+            errorMessage = err.detail[0]?.msg || errorMessage;
+          } else if (err.message) {
+            errorMessage = err.message;
+          } else if (err.detail && typeof err.detail === "object") {
+             errorMessage = JSON.stringify(err.detail);
+          }
+        } catch (e) {
+          // If response isn't JSON, keep the default errorMessage
+        }
+        setCreateError(errorMessage);
         return;
       }
       const data = await response.json();

@@ -3,7 +3,7 @@
 import uuid
 import secrets
 import string
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.user import User, UserRole  
 from sqlmodel import select
@@ -14,6 +14,7 @@ from app.routers.auth import get_current_user
 from app.schemas.admin_users import UserCreateRequest, UserCreateResponse, UserListResponse, UserListItem, UserRoleUpdateRequest, UserStatusUpdateRequest
 from datetime import datetime, timezone
 from app.services.emails import send_welcome_email
+from email_validator import validate_email, EmailNotValidError
 
 
 
@@ -23,7 +24,6 @@ router = APIRouter(prefix="/admin/users", tags=["Admin Users"])
 @router.post("/", response_model=UserCreateResponse)
 async def create_staff_user(
     data: UserCreateRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -35,7 +35,7 @@ async def create_staff_user(
             detail="Not authorized. Admin access required."
         )
     
-    # Check if email already exists in the system (Fix 3: prevents 500 crash on duplicates)
+    # Check if email already exists in the system
     existing = await db.execute(
         select(User).where(User.email == data.email.lower())
     )
@@ -44,34 +44,61 @@ async def create_staff_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this email already exists."
         )
+        
+    # EDGE CASE FIX: Validate that the email domain actually exists 
+    # (prevents fake emails like @fsdff.hjghj from being accepted)
+    try:
+        # check_deliverability=True verifies the domain has MX records setup for email
+        emailinfo = validate_email(data.email.lower(), check_deliverability=True)
+        validated_email = emailinfo.normalized
+    except EmailNotValidError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) # e.g. "The domain name fsdff.hjghj does not exist"
+        )
     
     # Generate a secure 12-character temporary password
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
     temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
     
-    # Save the new user to the database
+    # ---------------------------------------------------------------
+    # EDGE CASE FIX: Send email FIRST, create user SECOND
+    # ---------------------------------------------------------------
+    # Why this order?
+    #   OLD WAY: Create user → send email in background
+    #     Problem: If email fails, user exists but never got credentials.
+    #              Admin sees "success" but user can't log in. 
+    #
+    #   NEW WAY: Send email → if it works → create user
+    #     If email fails: no user is created, admin gets an error message
+    # ---------------------------------------------------------------
+    email_sent = send_welcome_email(
+        to_email=validated_email,
+        full_name=data.full_name,
+        temp_password=temp_password,
+    )
+    
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not send welcome email. User was NOT created. Please check the email address and try again."
+        )
+    
+    # Email sent successfully — NOW save the user to the database
     new_user = User(
-        email=data.email.lower(),
+        email=validated_email,
         full_name=data.full_name,
         role=data.role,
         hashed_password=hash_password(temp_password)   
     )
-    
+
     db.add(new_user)
     await db.commit()
-    # Send welcome email in background (doesn't block the response)
-    background_tasks.add_task(
-        send_welcome_email,
-        to_email=data.email.lower(),
-        full_name=data.full_name,
-        temp_password=temp_password,
-    )
-
     
     # Return the temporary password using the response schema
     return UserCreateResponse(
         message=f"{data.role.value} - {data.full_name} created successfully!",
-        email=data.email,
+        email=validated_email,
         temporary_password=temp_password
     )
 

@@ -27,11 +27,13 @@ from email.mime.text import MIMEText
 from app.config import settings
 
 
-def send_welcome_email(to_email: str, full_name: str, temp_password: str):
+def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> bool:
     """
     Sends a welcome email to a newly created staff/admin user.
-    Called as a background task from admin_users.py so it doesn't
-    block the API response.
+    
+    Returns:
+        True  — email sent successfully
+        False — email failed (caller should handle this)
     """
 
     login_url = f"{settings.FRONTEND_URL}/dashboard/login"
@@ -105,6 +107,8 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str):
             server.send_message(msg)
 
         print(f"  [EMAIL] Welcome email sent to {to_email}")
+        return True
 
     except Exception as e:
         print(f"  [EMAIL ERROR] Failed to send welcome email to {to_email}: {e}")
+        return False
