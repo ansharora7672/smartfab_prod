@@ -1,6 +1,8 @@
 import uuid
 import datetime as dt
 from sqlmodel import Field, SQLModel, Relationship
+from sqlalchemy import Column
+import sqlalchemy as sa
 from enum import Enum
 from typing import Optional
 
@@ -21,8 +23,11 @@ class Ticket(SQLModel, table=True):
     # Public ID formatting (SFL-YYYYMMDD-XXXX)
     ticket_id: str = Field(unique=True, index=True)
     
-    # Auto-stamp the exact moment of booking
-    created_at: dt.datetime = Field(default_factory=dt.datetime.now)
+    # Auto-stamp the exact moment of booking (timezone-aware UTC)
+    created_at: dt.datetime = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc),
+        sa_column=Column(sa.DateTime(timezone=True), nullable=False)
+    )
     
     # Form Details
     customer_name: str

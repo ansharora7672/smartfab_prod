@@ -6,9 +6,13 @@ from sqlmodel import select
 
 from app.database import get_session
 from app.models.ticket import Ticket, TicketStatusEnum
+from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketPublic
 from app.routers.auth import get_current_user # Only for staff routes!
 from sqlmodel import func
+import logging
+
+logger = logging.getLogger(__name__)
 ticket_router = APIRouter()
 
 # Intelligent function to generate the Ticket ID
@@ -40,27 +44,41 @@ async def generate_ticket_id(db: AsyncSession) -> str:
 @ticket_router.post("/public/tickets/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
 async def create_ticket(ticket_in: TicketCreate, db: AsyncSession = Depends(get_session)):
     
-    # 1. Generate the perfect ID
-    new_ticket_id = await generate_ticket_id(db)
-    
-    # 2. Prepare the database object instantly with the ID injected
-    db_ticket = Ticket(**ticket_in.model_dump(), ticket_id=new_ticket_id)
-    db_ticket.status = TicketStatusEnum.PENDING
-    
-    # 3. Save it forever
-    db.add(db_ticket)
-    await db.commit()
-    await db.refresh(db_ticket)
-    
-    # (Later we will add the Email Notification trigger right here!)
-    
-    return db_ticket
+    # Retry up to 3 times in case two customers submit at the exact same millisecond
+    # and generate the same ticket ID (race condition).
+    for attempt in range(3):
+        try:
+            # 1. Generate the perfect ID
+            new_ticket_id = await generate_ticket_id(db)
+            
+            # 2. Prepare the database object instantly with the ID injected
+            db_ticket = Ticket(**ticket_in.model_dump(), ticket_id=new_ticket_id)
+            db_ticket.status = TicketStatusEnum.PENDING
+            
+            # 3. Save it forever
+            db.add(db_ticket)
+            await db.commit()
+            await db.refresh(db_ticket)
+            
+            # (Later we will add the Email Notification trigger right here!)
+            
+            return db_ticket
+            
+        except Exception as e:
+            await db.rollback()  # Reset the failed transaction
+            logger.warning(f"Ticket creation attempt {attempt + 1} failed: {e}")
+            if attempt == 2:  # Last attempt failed
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not generate ticket. Please try again."
+                )
+            continue  # Try again with a new ID
 
 # ---------------------------------------------------------
 # INTERNAL ENDPOINT - Fetch Pending & Claimed Tickets
 # ---------------------------------------------------------
 @ticket_router.get("/admin/tickets/pending", response_model=list[TicketPublic])
-async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_user = Depends(get_current_user)):
+async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
     from app.models.user import User # Local import to prevent circular dependency
     
     # Our Outer Join logic: Fetch ALL tickets waiting on a call, and attach the User's name if they exist
@@ -90,6 +108,7 @@ async def get_available_slots(db: AsyncSession = Depends(get_session)):
     from app.models.availability import StaffAvailability
     
     today = dt.datetime.now().date()
+    now_time = dt.datetime.now().time()  # Current time for filtering past slots today
     end_date = today + dt.timedelta(days=14)
     
     # 1. Total Company Capacity (Count all Staff working per 30-min slot)
@@ -127,6 +146,10 @@ async def get_available_slots(db: AsyncSession = Depends(get_session)):
         
         # If we have more staff working than tickets booked, the slot is OPEN!
         if capacity > booked:
+            # Fix 11: Don't show slots that have already passed today
+            if d == today and t <= now_time:
+                continue
+                
             if date_str not in available_dict:
                 available_dict[date_str] = []
             available_dict[date_str].append(time_str)
@@ -140,7 +163,7 @@ async def get_available_slots(db: AsyncSession = Depends(get_session)):
 async def claim_ticket(
     ticket_id: str, 
     db: AsyncSession = Depends(get_session), 
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     from app.models.user import User
     # 1. Look up the ticket by the public SFL ID

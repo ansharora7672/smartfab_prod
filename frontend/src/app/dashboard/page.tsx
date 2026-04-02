@@ -4,13 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function DashboardHome() {
   const { user } = useAuth();
-  console.log(user);
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-primary-900 font-heading">
-          Welcome back, {user?.email?.split("@")[0]}
+          Welcome back, {user?.full_name || user?.email?.split("@")[0]}
         </h1>
         <p className="text-muted text-sm mt-1">
           {user?.role === "ADMIN"

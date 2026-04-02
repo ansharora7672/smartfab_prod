@@ -11,6 +11,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 interface AuthUser {
   id: string;
   email: string;
+  full_name: string;
   role: string;
 }
 
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await res.json();
-    setUser({ id: data.id, email: data.email, role: data.role });
+    setUser({ id: data.id, email: data.email, full_name: data.full_name, role: data.role });
   }
 
   async function logout() {

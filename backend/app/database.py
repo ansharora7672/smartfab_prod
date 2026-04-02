@@ -18,7 +18,7 @@ engine = create_async_engine(
     pool_size=5,        # Keep 5 connections ready (default)
     max_overflow=10,    # If all 5 are busy, create up to 10 more temporarily
     pool_timeout=30,    # Wait 30 sec for a free connection before giving up
-    echo=True,  # Set to False in production
+    echo=settings.APP_ENV == "development",  # Only print SQL queries in development mode
     future=True  # Use SQLAlchemy 2.0 style
 )
 # ============================================================
