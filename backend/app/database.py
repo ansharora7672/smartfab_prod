@@ -51,3 +51,41 @@ async def init_db():
     """
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+
+
+async def bootstrap_admin():
+    """ 
+    Problem: To create users, you need to be an Admin.
+             But if the database is empty, there are no Admins.
+    
+    Solution: On every startup, check if ANY user exists.
+              If the table is empty, create a Super Admin using
+              credentials from the .env file.
+    
+    Safety: Once at least one user exists, this function does NOTHING.
+            It will never overwrite or duplicate existing users.
+    """
+    from sqlmodel import select
+    from app.models.user import User, UserRole
+    from app.services.auth import hash_password
+    
+    async with async_session() as session:
+        # Check if ANY user exists in the database
+        result = await session.execute(select(User).limit(1))
+        existing_user = result.scalar_one_or_none()
+        
+        if existing_user:
+            # Users already exist — do nothing
+            return
+        
+        # No users found — create the bootstrap admin
+        admin = User(
+            email=settings.ADMIN_EMAIL,
+            full_name=settings.ADMIN_FULLNAME,
+            role=UserRole.ADMIN,
+            hashed_password=hash_password(settings.ADMIN_PASSWORD),
+        )
+        
+        session.add(admin)
+        await session.commit()
+        print(f"  [BOOTSTRAP] Admin user created: {settings.ADMIN_EMAIL}")

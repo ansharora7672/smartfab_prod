@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import init_db
+from app.database import init_db, bootstrap_admin
 from app.config import settings
 from app.routers import auth_router, admin_users_router, availability_router, ticket_router
 
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     print(f" Starting SmartFab Lathe API in {settings.APP_ENV} mode")
     await init_db()  # Create database tables
     print(" Database tables initialized")
+    await bootstrap_admin()  # Create first admin if DB is empty
 
     yield  # App is running and handling requests here
 
