@@ -1,10 +1,40 @@
-import resend
+# =============================================================================
+# EMAIL SERVICE — Gmail SMTP
+# =============================================================================
+# This module sends emails using Gmail's SMTP server.
+#
+# HOW IT WORKS:
+#   1. We connect to Gmail's mail server (smtp.gmail.com) on port 587
+#   2. We "upgrade" the connection to encrypted (TLS) so the password is safe
+#   3. We log in with your Gmail email + App Password (NOT your real password)
+#   4. We send the email and close the connection
+#
+# LIBRARIES USED (all built-in Python — no pip install needed):
+#   - smtplib:  The actual SMTP client that talks to Gmail's server
+#   - email.mime.multipart: Builds the email "envelope" (From, To, Subject)
+#   - email.mime.text: Attaches the HTML body to the envelope
+#
+# WHY NOT USE YOUR REAL GMAIL PASSWORD?
+#   Google blocks regular passwords in code for security. "App Passwords"
+#   are special 16-character passwords that ONLY allow sending emails.
+#   They can't read your inbox or change your account settings.
+# =============================================================================
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from app.config import settings
 
 
-def send_welcome_email(to_email: str, full_name: str, temp_password: str):
-
-    resend.api_key = settings.RESEND_API_KEY
+def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> bool:
+    """
+    Sends a welcome email to a newly created staff/admin user.
+    
+    Returns:
+        True  — email sent successfully
+        False — email failed (caller should handle this)
+    """
 
     login_url = f"{settings.FRONTEND_URL}/dashboard/login"
 
@@ -46,11 +76,39 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str):
     """
 
     try:
-        resend.Emails.send({
-            "from": "SmartFab Lathe <onboarding@resend.dev>",
-            "to": [to_email],
-            "subject": "Welcome to SmartFab Lathe — Your Account is Ready",
-            "html": html_body,
-        })
+        # ---------------------------------------------------------------
+        # BUILD THE EMAIL "ENVELOPE"
+        # ---------------------------------------------------------------
+        # Think of MIMEMultipart like a physical envelope:
+        #   - It has a "From" address on the top-left
+        #   - A "To" address in the center
+        #   - A "Subject" line
+        #   - The HTML body is the letter INSIDE the envelope
+        # ---------------------------------------------------------------
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = "Welcome to SmartFab Lathe — Your Account is Ready"
+
+        # Attach the HTML body as the email content
+        # "html" tells the email client to render it as a web page, not plain text
+        msg.attach(MIMEText(html_body, "html"))
+
+        # ---------------------------------------------------------------
+        # CONNECT TO GMAIL & SEND
+        # ---------------------------------------------------------------
+        # Port 587 = SMTP with STARTTLS (starts unencrypted, upgrades to encrypted)
+        # starttls() = "Start Transport Layer Security" — encrypts the connection
+        #              so your App Password travels safely over the internet
+        # ---------------------------------------------------------------
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()  # Upgrade to encrypted connection
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Welcome email sent to {to_email}")
+        return True
+
     except Exception as e:
-        print(f"[EMAIL ERROR] Failed to send welcome email to {to_email}: {e}")
+        print(f"  [EMAIL ERROR] Failed to send welcome email to {to_email}: {e}")
+        return False
