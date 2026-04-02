@@ -135,12 +135,13 @@ export default function Navbar() {
           >
             Track Your Order
           </a>
-          <a
-            href="#quote"
-            className="text-sm font-medium px-5 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-900 transition-all duration-500"
-          >
-            Get a Quote
-          </a>
+<Link
+              href="/quote"
+              className="text-sm font-medium px-5 py-2 rounded-xl bg-primary-600 text-white text-center hover:bg-primary-900 transition-all duration-500"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Get a Quote
+            </Link>
         </div>
 
         {/* MOBILE HAMBURGER BUTTON — visible only on small screens (md:hidden) */}

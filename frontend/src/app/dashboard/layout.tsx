@@ -73,6 +73,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         >
           Dashboard
         </Link>
+                {/* NEW PENDING TICKETS TAB */}
+        <Link
+          href="/dashboard/tickets/pending"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/tickets/pending")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Pending Consultations
+        </Link>
+
         
         {/* New Availability Tab for EVERYONE */}
         <Link
