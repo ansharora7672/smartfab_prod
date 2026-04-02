@@ -57,16 +57,28 @@ async def create_ticket(ticket_in: TicketCreate, db: AsyncSession = Depends(get_
     return db_ticket
 
 # ---------------------------------------------------------
-# INTERNAL ENDPOINT - Staff use this on the Dashboard
-# Notice this IS protected by `get_current_user`!
+# INTERNAL ENDPOINT - Fetch Pending & Claimed Tickets
 # ---------------------------------------------------------
 @ticket_router.get("/admin/tickets/pending", response_model=list[TicketPublic])
 async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_user = Depends(get_current_user)):
-    # Grab all tickets that are still PENDING, sorted by oldest first
-    statement = select(Ticket).where(Ticket.status == TicketStatusEnum.PENDING).order_by(Ticket.created_at.asc())
+    from app.models.user import User # Local import to prevent circular dependency
+    
+    # Our Outer Join logic: Fetch ALL tickets waiting on a call, and attach the User's name if they exist
+    statement = (
+        select(Ticket, User.full_name)
+        .outerjoin(User, Ticket.assigned_to_id == User.id)
+        .where(Ticket.status.in_([TicketStatusEnum.PENDING, TicketStatusEnum.CLAIMED]))
+        .order_by(Ticket.created_at.asc())
+    )
     result = await db.execute(statement)
-    return result.scalars().all()
-
+    rows = result.all()
+    
+    # rows is now a list of Tuples (TicketObject, "John Doe")
+    # We unpack it and build a perfect dictionary map for Pydantic to validate
+    return [
+        {**ticket.model_dump(), "assignee_name": name}
+        for ticket, name in rows
+    ]
 
 
 
@@ -120,3 +132,37 @@ async def get_available_slots(db: AsyncSession = Depends(get_session)):
             available_dict[date_str].append(time_str)
             
     return available_dict
+
+# ---------------------------------------------------------
+# INTERNAL ENDPOINT - Claim a specific Ticket
+# ---------------------------------------------------------
+@ticket_router.patch("/admin/tickets/{ticket_id}/claim", response_model=TicketPublic)
+async def claim_ticket(
+    ticket_id: str, 
+    db: AsyncSession = Depends(get_session), 
+    current_user = Depends(get_current_user)
+):
+    from app.models.user import User
+    # 1. Look up the ticket by the public SFL ID
+    statement = select(Ticket).where(Ticket.ticket_id == ticket_id)
+    result = await db.execute(statement)
+    ticket = result.scalars().first()
+    
+    # 2. Critical Safety Checks
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found in the system.")
+        
+    # We use a strict check here so two people don't claim the exact same ticket on accident!
+    if ticket.status != TicketStatusEnum.PENDING:
+        raise HTTPException(status_code=400, detail="This ticket has already been claimed or processed.")
+        
+    # 3. Apply the changes!
+    ticket.status = TicketStatusEnum.CLAIMED
+    ticket.assigned_to_id = current_user.id
+    
+    db.add(ticket)
+    await db.commit()
+    await db.refresh(ticket)
+    
+    # Return exactly what Pydantic expects so the frontend gets live data
+    return {**ticket.model_dump(), "assignee_name": current_user.full_name}

@@ -33,3 +33,4 @@ class TicketPublic(TicketBase):
     created_at: dt.datetime
     status: TicketStatusEnum
     assigned_to_id: uuid.UUID | None = None
+    assignee_name: str | None = None
