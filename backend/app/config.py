@@ -14,7 +14,9 @@ class Settings(BaseSettings):
         env_file=".env",            
         env_file_encoding="utf-8" 
     )
-    RESEND_API_KEY: str
+    # Email Settings (Gmail SMTP)
+    SMTP_EMAIL: str
+    SMTP_APP_PASSWORD: str
     FRONTEND_URL: str
 
     # Bootstrap Admin Settings
