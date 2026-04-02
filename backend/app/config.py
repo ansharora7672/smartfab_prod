@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str
     FRONTEND_URL: str
 
+    # Bootstrap Admin Settings
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
+    ADMIN_FULLNAME: str
+
 
 
 settings = Settings()
