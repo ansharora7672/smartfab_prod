@@ -1,13 +1,13 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from app.models.user import UserRole
 from typing import List
 from datetime import datetime
 import uuid
 
-# The data we expect to receive from the Next.js form
+# The data expected from the Next.js form upon staff/admin creation
 class UserCreateRequest(BaseModel):
     email: EmailStr  
-    full_name: str
+    full_name: str = Field(..., max_length=100) # Precaution against arbitrary length string allocation DOs
     role: UserRole
 
 # The data we promise to send back to Next.js

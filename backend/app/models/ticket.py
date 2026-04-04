@@ -44,3 +44,13 @@ class Ticket(SQLModel, table=True):
     
     # Links to the staff member who claims it
     assigned_to_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id")
+    
+    # Scheduler notification tracking — prevents duplicate emails
+    reminder_sent_at: Optional[dt.datetime] = Field(
+        default=None,
+        sa_column=Column(sa.DateTime(timezone=True), nullable=True)
+    )
+    completion_prompt_sent_at: Optional[dt.datetime] = Field(
+        default=None,
+        sa_column=Column(sa.DateTime(timezone=True), nullable=True)
+    )

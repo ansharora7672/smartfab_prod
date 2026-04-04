@@ -21,9 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, bootstrap_admin
 from app.config import settings
 from app.routers import auth_router, admin_users_router, availability_router, ticket_router
+from app.routers.quotes import quotes_router
 
 # Start our background email scheduler!
 from app.services.scheduler import start_scheduler, stop_scheduler
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 
 # ============================================================
@@ -65,6 +70,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Set up global rate limiting to mitigate DDoS vectors
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ============================================================
 # CORS MIDDLEWARE
 # ============================================================
@@ -99,3 +109,4 @@ app.include_router(auth_router)
 app.include_router(admin_users_router)
 app.include_router(availability_router)
 app.include_router(ticket_router)
+app.include_router(quotes_router)

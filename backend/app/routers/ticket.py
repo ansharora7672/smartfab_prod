@@ -1,24 +1,22 @@
 import uuid
 import datetime as dt
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
+from sqlmodel import select, func, update
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 from app.database import get_session
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User, UserRole
-from app.schemas.ticket import TicketCreate, TicketPublic
-from app.routers.auth import get_current_user # Only for staff routes!
-from sqlmodel import func
-import logging
-
-
-# Trigger Email Notification to ALL staff and admins!
-from app.models.user import User
+from app.schemas.ticket import TicketCreate, TicketPublic, TicketAssignRequest
+from app.routers.auth import get_current_user
 from app.services.emails import send_ticket_lifecycle_notification
 
-# Trigger the Email to the Staff member!
-from app.services.emails import send_ticket_lifecycle_notification
 logger = logging.getLogger(__name__)
 ticket_router = APIRouter()
 
@@ -27,7 +25,6 @@ async def generate_ticket_id(db: AsyncSession) -> str:
     # Get today's date formatted as YYYYMMDD
     today_str = dt.datetime.now().strftime("%Y%m%d")
     prefix = f"SFL-{today_str}-"
-    1
     # Look in the database for the most recent ticket created TODAY
     statement = select(Ticket).where(Ticket.ticket_id.startswith(prefix)).order_by(Ticket.ticket_id.desc())
     result = await db.execute(statement)
@@ -49,7 +46,9 @@ async def generate_ticket_id(db: AsyncSession) -> str:
 # Notice there is NO `Depends(get_current_user)` here!
 # ---------------------------------------------------------
 @ticket_router.post("/public/tickets/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def create_ticket(
+    request: Request,
     ticket_in: TicketCreate, 
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session)
@@ -105,7 +104,7 @@ async def create_ticket(
 # ---------------------------------------------------------
 @ticket_router.get("/admin/tickets/pending", response_model=list[TicketPublic])
 async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
-    from app.models.user import User # Local import to prevent circular dependency
+
     
     # Our Outer Join logic: Fetch ALL tickets waiting on a call, and attach the User's name if they exist
     statement = (
@@ -124,6 +123,37 @@ async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_u
         for ticket, name in rows
     ]
 
+# ---------------------------------------------------------
+# INTERNAL ENDPOINT - Fetch Transition Stage Tickets
+# ---------------------------------------------------------
+@ticket_router.get("/admin/tickets/transition", response_model=list[TicketPublic])
+async def get_transition_tickets(
+    db: AsyncSession = Depends(get_session), 
+    current_user: User = Depends(get_current_user)
+):
+    
+    # We outer-join the User table just like the pending endpoint
+    # so we know exactly WHICH staff member is assigned to this transition!
+    statement = (
+        select(Ticket, User.full_name)
+        .outerjoin(User, Ticket.assigned_to_id == User.id)
+        .where(
+            Ticket.status.in_([
+                TicketStatusEnum.CALL_COMPLETED, 
+                TicketStatusEnum.IN_QUOTE_PREPARATION
+            ])
+        )
+        .order_by(Ticket.created_at.desc()) # Newest updates at the top
+    )
+    
+    result = await db.execute(statement)
+    rows = result.all()
+    
+    return [
+        {**ticket.model_dump(), "assignee_name": name}
+        for ticket, name in rows
+    ]
+
 
 
 # ---------------------------------------------------------
@@ -133,8 +163,9 @@ async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_u
 async def get_available_slots(db: AsyncSession = Depends(get_session)):
     from app.models.availability import StaffAvailability
     
-    today = dt.datetime.now().date()
-    now_time = dt.datetime.now().time()  # Current time for filtering past slots today
+    # Ensure availability filtering strictly adheres to UTC
+    today = dt.datetime.now(dt.timezone.utc).date()
+    now_time = dt.datetime.now(dt.timezone.utc).time() 
     end_date = today + dt.timedelta(days=14)
     
     # 1. Total Company Capacity (Count all Staff working per 30-min slot)
@@ -191,29 +222,31 @@ async def claim_ticket(
     db: AsyncSession = Depends(get_session), 
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.user import User
-    # 1. Look up the ticket by the public SFL ID
-    statement = select(Ticket).where(Ticket.ticket_id == ticket_id)
+
+    # Atomic UPDATE ensures that concurrent claim attempts do not overwrite each other.
+    # The WHERE constraints guarantee the row is only mutated if its state hasn't changed.
+    statement = (
+        update(Ticket)
+        .where(Ticket.ticket_id == ticket_id)
+        .where(Ticket.status == TicketStatusEnum.PENDING)
+        .values(
+            status=TicketStatusEnum.CLAIMED,
+            assigned_to_id=current_user.id
+        )
+        .returning(Ticket)
+    )
     result = await db.execute(statement)
     ticket = result.scalars().first()
     
-    # 2. Critical Safety Checks
     if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found in the system.")
+        raise HTTPException(
+            status_code=400, 
+            detail="Ticket not found or has already been claimed by another user."
+        )
         
-    # We use a strict check here so two people don't claim the exact same ticket on accident!
-    if ticket.status != TicketStatusEnum.PENDING:
-        raise HTTPException(status_code=400, detail="This ticket has already been claimed or processed.")
-        
-    # 3. Apply the changes!
-    ticket.status = TicketStatusEnum.CLAIMED
-    ticket.assigned_to_id = current_user.id
-    
-    db.add(ticket)
     await db.commit()
-    await db.refresh(ticket)
     
-    # Return exactly what Pydantic expects so the frontend gets live data
+    # Return mapping matching the Pydantic schema for the mapped frontend interface
     return {**ticket.model_dump(), "assignee_name": current_user.full_name}
 
 # ---------------------------------------------------------
@@ -233,7 +266,7 @@ async def mark_call_completed(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found.")
     
-    if ticket.assigned_to_id != current_user.id and current_user.role != "ADMIN":
+    if ticket.assigned_to_id != current_user.id and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="You must be the assigned owner to complete this call.")
         
     if ticket.status != TicketStatusEnum.CLAIMED:
@@ -253,18 +286,16 @@ async def mark_call_completed(
 @ticket_router.patch("/admin/tickets/{ticket_id}/assign", response_model=TicketPublic)
 async def assign_ticket(
     ticket_id: str, 
-    user_id: uuid.UUID,
+    data: TicketAssignRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session), 
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.user import User
-
-    if current_user.role != "ADMIN":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Only Admins can forcefully assign tickets.")
 
     ticket_stmt = select(Ticket).where(Ticket.ticket_id == ticket_id)
-    user_stmt = select(User).where(User.id == user_id)
+    user_stmt = select(User).where(User.id == data.user_id)
     
     ticket_res = await db.execute(ticket_stmt)
     user_res = await db.execute(user_stmt)

@@ -84,8 +84,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         >
           Pending Consultations
         </Link>
-
         
+        {/* TRANSITION (Quote Preparation) TAB */}
+        <Link
+          href="/dashboard/transition"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/transition")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Quote Preparation
+        </Link>
+
         {/* New Availability Tab for EVERYONE */}
         <Link
           href="/dashboard/availability"

@@ -21,7 +21,7 @@ async def check_upcoming_and_past_calls():
         result = await session.execute(statement)
         tickets = result.scalars().all()
         
-        now = datetime.now() # Naive datetime is used since the ticket's consultation time is naive
+        now = datetime.now(timezone.utc)  # Timezone-aware to match ticket timestamps
         
         for ticket in tickets:
             if not ticket.assigned_to_id:
@@ -34,23 +34,31 @@ async def check_upcoming_and_past_calls():
             if not user:
                 continue
 
-            # Calculate datetime of the consultation
-            call_dt = datetime.combine(ticket.consultation_date, ticket.consultation_time)
+            # Calculate datetime of the consultation (treat as UTC)
+            call_dt = datetime.combine(ticket.consultation_date, ticket.consultation_time).replace(tzinfo=timezone.utc)
             
             # If call is exactly 60 minutes away (allow a 5 min window to catch it)
             time_diff = call_dt - now
-            if timedelta(minutes=55) <= time_diff <= timedelta(minutes=60):
-                await asyncio.to_thread(
-                    send_ticket_lifecycle_notification,
-                    user.email, "UPCOMING_REMINDER", {"ticket": ticket, "user": user}
-                )
+            if timedelta(minutes=55) <= time_diff <= timedelta(minutes=65):
+                if ticket.reminder_sent_at is None:  # Only send once!
+                    await asyncio.to_thread(
+                        send_ticket_lifecycle_notification,
+                        user.email, "UPCOMING_REMINDER", {"ticket": ticket, "user": user}
+                    )
+                    ticket.reminder_sent_at = datetime.now(timezone.utc)
+                    session.add(ticket)
+                    await session.commit()
                 
-            # If call time has just passed (0 to 5 mins past)
-            if timedelta(minutes=-5) <= time_diff <= timedelta(minutes=0):
-                await asyncio.to_thread(
-                    send_ticket_lifecycle_notification,
-                    user.email, "CALL_COMPLETED_PROMPT", {"ticket": ticket, "user": user}
-                )
+            # If call time has just passed (0 to 10 mins past)
+            if timedelta(minutes=-10) <= time_diff <= timedelta(minutes=0):
+                if ticket.completion_prompt_sent_at is None:  # Only send once!
+                    await asyncio.to_thread(
+                        send_ticket_lifecycle_notification,
+                        user.email, "CALL_COMPLETED_PROMPT", {"ticket": ticket, "user": user}
+                    )
+                    ticket.completion_prompt_sent_at = datetime.now(timezone.utc)
+                    session.add(ticket)
+                    await session.commit()
 
 def start_scheduler():
     logger.info("Starting Background APScheduler...")
