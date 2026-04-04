@@ -152,7 +152,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden print:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -166,14 +166,14 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="fixed flex-col hidden h-screen text-white lg:flex w-64 bg-primary-900">
+      <aside className="fixed flex-col hidden h-screen text-white lg:flex w-64 bg-primary-900 print:hidden">
         {sidebarContent}
       </aside>
 
       {/* MAIN AREA */}
-      <div className="flex flex-col flex-1 min-h-screen lg:ml-64">
+      <div className="flex flex-col flex-1 min-h-screen lg:ml-64 print:ml-0 print:min-h-0 bg-section-bg print:bg-white">
         {/* MOBILE TOP BAR */}
-        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border">
+        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border print:hidden">
           <button onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5 text-text-primary" />
           </button>
@@ -183,7 +183,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="w-5" />
         </header>
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">{children}</main>
       </div>
     </div>
   );

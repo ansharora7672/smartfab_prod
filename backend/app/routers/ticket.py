@@ -46,7 +46,7 @@ async def generate_ticket_id(db: AsyncSession) -> str:
 # Notice there is NO `Depends(get_current_user)` here!
 # ---------------------------------------------------------
 @ticket_router.post("/public/tickets/", response_model=TicketPublic, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
+@limiter.limit("15/minute")
 async def create_ticket(
     request: Request,
     ticket_in: TicketCreate, 
