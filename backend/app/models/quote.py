@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 import datetime as dt
 from enum import Enum
 from typing import List, Optional
@@ -25,34 +24,28 @@ class Quote(SQLModel, table=True):
     # Links to the Consultation Ticket
     ticket_id: uuid.UUID = Field(foreign_key="tickets.id", index=True, nullable=False)
     
-    # Official tracking
-    invoice_no: str = Field(index=True, unique=True, nullable=False)
+    # Official Quote Reference / Order No
+    quote_no: str = Field(index=True, unique=True, nullable=False)
     
-    # Form Meta Data
-    delivery_note: Optional[str] = Field(default="")
-    payment_terms: Optional[str] = Field(default="")
-    supplier_reference: Optional[str] = Field(default="")
-    other_references: Optional[str] = Field(default="")
-    delivery_note_date: Optional[dt.date] = Field(default=None)
-    despatched_through: Optional[str] = Field(default="")
-    destination: Optional[str] = Field(default="")
-    terms_of_delivery: Optional[str] = Field(default="")
+    # --- PDF Header Fields based on SmartFab_Quotation.pdf ---
+    company_name: str
+    address: str
+    phone_no: str
+    quote_date: dt.date = Field(default_factory=dt.date.today)
     
-    # Subtotals
-    amount_chargeable_words: str = Field(default="")
-    taxable_value: float = Field(default=0.0)
-    vat_total: float = Field(default=0.0)
-    invoice_total: float = Field(default=0.0)
+    # LPO might be empty initially, filled when client sends it
+    lpo_no: Optional[str] = Field(default="")
+    lead_time_approx: str = Field(default="")
     
+    # Status & Timestamps
     status: QuoteStatusEnum = Field(default=QuoteStatusEnum.DRAFT)
     
-    # Timestamps
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+    created_at: dt.datetime = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc),
         sa_column=Column(sa.DateTime(timezone=True), nullable=False)
     )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+    updated_at: dt.datetime = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc),
         sa_column=Column(sa.DateTime(timezone=True), nullable=False)
     )
     
@@ -66,21 +59,12 @@ class QuoteItem(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     quote_id: uuid.UUID = Field(foreign_key="quotes.id", index=True, nullable=False)
     
-    # The actual vendor assigned during Active Order phase can be tracked here later
-    # assigned_vendor_id: Optional[uuid.UUID] = Field(foreign_key="vendors.id", default=None)
-    
+    # --- PDF Table Fields ---
     sr_no: int
-    description_of_service: str
-    quantity: int
-    per: str  # e.g., 'pcs', 'kg'
-    
-    rate_excl_vat: float
-    rate_incl_vat: float
-    discount_aed: float = Field(default=0.0)
-    vat_percentage: float = Field(default=5.0)  # Standard UAE VAT is 5%
-    
-    amount: float
-    total_incl_vat: float
+    item_description: str
+    qty: int
+    u_price: float
+    total_amount: float
     
     # Relationships
     quote: Quote = Relationship(back_populates="items")

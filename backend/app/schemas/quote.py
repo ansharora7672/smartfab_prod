@@ -10,15 +10,10 @@ from app.models.quote import QuoteStatusEnum
 # ----------------------------------------------------
 class QuoteItemBase(BaseModel):
     sr_no: int
-    description_of_service: str
-    quantity: int
-    per: str
-    rate_excl_vat: float
-    rate_incl_vat: float
-    discount_aed: float
-    vat_percentage: float
-    amount: float
-    total_incl_vat: float
+    item_description: str
+    qty: int
+    u_price: float
+    total_amount: float
 
 class QuoteItemCreate(QuoteItemBase):
     pass
@@ -32,25 +27,19 @@ class QuoteItemResponse(QuoteItemBase):
 # ----------------------------------------------------
 class QuoteBase(BaseModel):
     ticket_id: uuid.UUID
-    delivery_note: Optional[str] = ""
-    payment_terms: Optional[str] = ""
-    supplier_reference: Optional[str] = ""
-    other_references: Optional[str] = ""
-    delivery_note_date: Optional[dt.date] = None
-    despatched_through: Optional[str] = ""
-    destination: Optional[str] = ""
-    terms_of_delivery: Optional[str] = ""
-    amount_chargeable_words: str = ""
-    taxable_value: float = 0.0
-    vat_total: float = 0.0
-    invoice_total: float = 0.0
+    company_name: str
+    address: str
+    phone_no: str
+    lpo_no: Optional[str] = ""
+    lead_time_approx: str = ""
 
 class QuoteCreate(QuoteBase):
     items: List[QuoteItemCreate]
 
 class QuoteResponse(QuoteBase):
     id: uuid.UUID
-    invoice_no: str
+    quote_no: str
+    quote_date: dt.date
     status: QuoteStatusEnum
     created_at: dt.datetime
     updated_at: dt.datetime

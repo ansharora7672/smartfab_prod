@@ -44,7 +44,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
           <Image
-            src="/smartfab_white_logo.png"
+            src="/images/smartfab_white_logo.png"
             alt="SmartFab Lathe"
             width={40}
             height={40}

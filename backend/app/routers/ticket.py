@@ -126,7 +126,7 @@ async def get_pending_tickets(db: AsyncSession = Depends(get_session), current_u
 # ---------------------------------------------------------
 # INTERNAL ENDPOINT - Fetch Transition Stage Tickets
 # ---------------------------------------------------------
-@ticket_router.get("/admin/tickets/transition", response_model=list[TicketPublic])
+@ticket_router.get("/admin/tickets/transition")
 async def get_transition_tickets(
     db: AsyncSession = Depends(get_session), 
     current_user: User = Depends(get_current_user)
@@ -149,10 +149,44 @@ async def get_transition_tickets(
     result = await db.execute(statement)
     rows = result.all()
     
-    return [
-        {**ticket.model_dump(), "assignee_name": name}
-        for ticket, name in rows
-    ]
+    # For each ticket, also fetch the most recent quote (if one exists)
+    # This lets the frontend show "Preview / Edit / Send" vs "Generate Quote"
+    from app.models.quote import Quote
+    
+    response = []
+    for ticket, assignee_name in rows:
+        # Get the latest quote for this ticket
+        quote_stmt = (
+            select(Quote)
+            .where(Quote.ticket_id == ticket.id)
+            .order_by(Quote.created_at.desc())
+            .limit(1)
+        )
+        quote_result = await db.execute(quote_stmt)
+        latest_quote = quote_result.scalars().first()
+        
+        ticket_dict = {**ticket.model_dump(), "assignee_name": assignee_name}
+        
+        # Attach quote summary if one exists
+        if latest_quote:
+            from app.models.quote import QuoteItem
+            items_stmt = select(func.sum(QuoteItem.total_amount)).where(QuoteItem.quote_id == latest_quote.id)
+            items_res = await db.execute(items_stmt)
+            total = items_res.scalar() or 0.0
+
+            ticket_dict["quote"] = {
+                "id": str(latest_quote.id),
+                "invoice_no": latest_quote.quote_no,
+                "status": latest_quote.status.value,
+                "invoice_total": total,
+            }
+        else:
+            ticket_dict["quote"] = None
+
+        
+        response.append(ticket_dict)
+    
+    return response
 
 
 

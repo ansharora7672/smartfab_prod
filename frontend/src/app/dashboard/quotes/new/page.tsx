@@ -2,20 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Trash2, Save, FileText, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, FileText, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 interface QuoteItem {
   sr_no: number;
-  description_of_service: string;
-  quantity: number;
-  per: string;
-  rate_excl_vat: number;
-  rate_incl_vat: number;
-  discount_aed: number;
-  vat_percentage: number;
-  amount: number;
-  total_incl_vat: number;
+  item_description: string;
+  qty: number;
+  u_price: number;
+  total_amount: number;
 }
 
 export default function NewQuotePage() {
@@ -26,35 +21,26 @@ export default function NewQuotePage() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Global Quote Metadata
-  const [deliveryNote, setDeliveryNote] = useState("");
-  const [paymentTerms, setPaymentTerms] = useState("100% Advance Payment");
-  const [supplierReference, setSupplierReference] = useState("");
-  const [otherReferences, setOtherReferences] = useState("");
-  const [despatchedThrough, setDespatchedThrough] = useState("");
-  const [destination, setDestination] = useState("");
-  const [termsOfDelivery, setTermsOfDelivery] = useState("");
+  // Global Quote Metadata (Simplified for Quotation)
+  const [companyName, setCompanyName] = useState("");
+  const [address, setAddress] = useState("");
+  const [phoneNo, setPhoneNo] = useState("");
+  const [lpoNo, setLpoNo] = useState("");
+  const [leadTimeApprox, setLeadTimeApprox] = useState("");
 
   // Items State
   const [items, setItems] = useState<QuoteItem[]>([
     {
       sr_no: 1,
-      description_of_service: "",
-      quantity: 1,
-      per: "pcs",
-      rate_excl_vat: 0,
-      rate_incl_vat: 0,
-      discount_aed: 0,
-      vat_percentage: 5,
-      amount: 0,
-      total_incl_vat: 0,
+      item_description: "",
+      qty: 1,
+      u_price: 0,
+      total_amount: 0,
     },
   ]);
 
   // Derived Totals
-  const taxableValue = items.reduce((acc, item) => acc + item.amount, 0);
-  const vatTotal = items.reduce((acc, item) => acc + (item.total_incl_vat - item.amount), 0);
-  const invoiceTotal = taxableValue + vatTotal;
+  const invoiceTotal = items.reduce((acc, item) => acc + item.total_amount, 0);
 
   // Auto-dismiss alerts
   useEffect(() => {
@@ -69,15 +55,10 @@ export default function NewQuotePage() {
       ...items,
       {
         sr_no: items.length + 1,
-        description_of_service: "",
-        quantity: 1,
-        per: "pcs",
-        rate_excl_vat: 0,
-        rate_incl_vat: 0,
-        discount_aed: 0,
-        vat_percentage: 5,
-        amount: 0,
-        total_incl_vat: 0,
+        item_description: "",
+        qty: 1,
+        u_price: 0,
+        total_amount: 0,
       },
     ]);
   };
@@ -93,26 +74,15 @@ export default function NewQuotePage() {
 
   const updateItem = (index: number, field: keyof QuoteItem, value: string | number) => {
     const newItems = [...items];
-    const item = { ...newItems[index], [field]: value };
 
-    // Auto-calculate logic matching the SmartFab Template
-    if (['quantity', 'rate_excl_vat', 'discount_aed', 'vat_percentage'].includes(field)) {
-      const qty = parseFloat(item.quantity.toString()) || 0;
-      const rateExcl = parseFloat(item.rate_excl_vat.toString()) || 0;
-      const discount = parseFloat(item.discount_aed.toString()) || 0;
-      const vatPercent = parseFloat(item.vat_percentage.toString()) || 5;
+    const numericFields: (keyof QuoteItem)[] = ['sr_no', 'qty', 'u_price', 'total_amount'];
+    const parsedValue = numericFields.includes(field) ? (parseFloat(value as string) || 0) : value;
+    
+    const item = { ...newItems[index], [field]: parsedValue };
 
-      // 1. Calculate Amount (Taxable Value) per item = (Qty * Rate) - Discount
-      const grossAmount = qty * rateExcl;
-      const finalAmount = grossAmount - discount;
-      item.amount = Math.max(0, finalAmount);
-
-      // 2. Calculate VAT logic per item
-      const vatAmount = item.amount * (vatPercent / 100);
-      item.total_incl_vat = item.amount + vatAmount;
-
-      // 3. Update the displayed Rate Incl VAT per unit logic
-      item.rate_incl_vat = rateExcl + (rateExcl * (vatPercent / 100));
+    // Auto-calculate total amount
+    if (field === 'qty' || field === 'u_price') {
+      item.total_amount = (item.qty || 0) * (item.u_price || 0);
     }
 
     newItems[index] = item;
@@ -129,17 +99,11 @@ export default function NewQuotePage() {
     try {
       const payload = {
         ticket_id,
-        delivery_note: deliveryNote,
-        payment_terms: paymentTerms,
-        supplier_reference: supplierReference,
-        other_references: otherReferences,
-        despatched_through: despatchedThrough,
-        destination,
-        terms_of_delivery: termsOfDelivery,
-        amount_chargeable_words: "", // Advanced parsing logic happens later
-        taxable_value: taxableValue,
-        vat_total: vatTotal,
-        invoice_total: invoiceTotal,
+        company_name: companyName,
+        address,
+        phone_no: phoneNo,
+        lpo_no: lpoNo,
+        lead_time_approx: leadTimeApprox,
         items
       };
 
@@ -150,19 +114,22 @@ export default function NewQuotePage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed to save quote");
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        const detail = errorBody?.detail || `Server returned ${res.status}`;
+        throw new Error(detail);
+      }
       
       const newQuote = await res.json();
       
       setFeedback({ type: "success", message: "Quote saved successfully! Generating View..." });
       
-      // Redirect to the newly created option B view
       setTimeout(() => {
          router.push(`/dashboard/quotes/${newQuote.id}/pdf`);
       }, 1500);
 
-    } catch (err) {
-      setFeedback({ type: "error", message: "Save failed. Check network." });
+    } catch (err: any) {
+      setFeedback({ type: "error", message: `Save failed: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -196,28 +163,28 @@ export default function NewQuotePage() {
         {/* Left Column - Global Metadata */}
         <div className="lg:col-span-1 space-y-6">
           <div className="p-6 bg-white border border-border shadow-sm rounded-2xl">
-            <h3 className="font-bold text-sm text-primary-900 uppercase tracking-widest mb-4">Terms & Logistics</h3>
+            <h3 className="font-bold text-sm text-primary-900 uppercase tracking-widest mb-4">Client & Details</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Payment Terms</label>
-                <input type="text" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" />
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Company Name</label>
+                <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="E.g., Acme Corp"/>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Delivery Note Ref</label>
-                <input type="text" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="Optional..." />
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Address</label>
+                <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="E.g., 123 Industrial Rd"/>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Destination</label>
-                <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="E.g., Ajman, UAE" />
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Phone Number</label>
+                <input type="text" value={phoneNo} onChange={(e) => setPhoneNo(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="+971..."/>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Despatched Through</label>
-                <input type="text" value={despatchedThrough} onChange={(e) => setDespatchedThrough(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="E.g., Company Driver" />
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5">L.P.O. No (If available)</label>
+                <input type="text" value={lpoNo} onChange={(e) => setLpoNo(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="Optional..."/>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Terms of Delivery</label>
-                <textarea rows={3} value={termsOfDelivery} onChange={(e) => setTermsOfDelivery(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="Ex works, shipping notes..." />
+                <label className="block text-xs font-semibold text-text-secondary mb-1.5">Lead Time (Approx)</label>
+                <input type="text" value={leadTimeApprox} onChange={(e) => setLeadTimeApprox(e.target.value)} className="w-full p-2.5 bg-section-bg/50 border rounded-lg text-sm" placeholder="E.g., 2 Weeks"/>
               </div>
             </div>
           </div>
@@ -245,32 +212,23 @@ export default function NewQuotePage() {
                   
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-12">
-                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Description of Service</label>
-                      <input type="text" value={item.description_of_service} onChange={(e) => updateItem(index, 'description_of_service', e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="E.g. CNC Milling for Aluminum Brackets" />
+                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Item Description</label>
+                      <input type="text" value={item.item_description} onChange={(e) => updateItem(index, 'item_description', e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="E.g. CNC Milling for Aluminum Brackets" />
                     </div>
                     
-                    <div className="col-span-3">
+                    <div className="col-span-4">
                       <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Qty</label>
-                      <input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
+                      <input type="number" min="1" value={item.qty} onChange={(e) => updateItem(index, 'qty', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
                     </div>
-                    <div className="col-span-3">
-                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Unit</label>
-                      <input type="text" value={item.per} onChange={(e) => updateItem(index, 'per', e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="pcs" />
+                    <div className="col-span-4">
+                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">U. Price (AED)</label>
+                      <input type="number" min="0" step="0.01" value={item.u_price} onChange={(e) => updateItem(index, 'u_price', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
                     </div>
-                    <div className="col-span-3">
-                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Rate (AED)</label>
-                      <input type="number" min="0" step="0.01" value={item.rate_excl_vat} onChange={(e) => updateItem(index, 'rate_excl_vat', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
+                    <div className="col-span-4 flex items-end justify-end pb-2">
+                       <span className="font-bold text-sm text-primary-900 border-b border-dotted border-border pb-1">
+                         Total: {item.total_amount.toFixed(2)} AED
+                       </span>
                     </div>
-                    <div className="col-span-3">
-                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1.5">Discount</label>
-                      <input type="number" min="0" step="0.01" value={item.discount_aed} onChange={(e) => updateItem(index, 'discount_aed', e.target.value)} className="w-full p-2 border rounded-lg text-sm text-[red]" />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex justify-end gap-6 text-sm">
-                    <span className="text-muted text-xs">Gross: <b className="text-text-primary">{(item.quantity * item.rate_excl_vat).toFixed(2)} AED</b></span>
-                    <span className="text-muted text-xs">VAT (5%): <b className="text-text-primary">{(item.amount * 0.05).toFixed(2)} AED</b></span>
-                    <span className="text-primary-900 text-xs font-bold bg-primary-100/30 px-2 py-0.5 rounded">Net Total: {item.total_incl_vat.toFixed(2)} AED</span>
                   </div>
                 </div>
               ))}
@@ -278,14 +236,8 @@ export default function NewQuotePage() {
 
             {/* Global Totals */}
             <div className="mt-8 pt-6 border-t flex flex-col items-end gap-2">
-              <div className="text-sm text-text-secondary flex gap-8 w-64 justify-between">
-                <span>Taxable Value:</span> <span className="font-mono">{taxableValue.toFixed(2)} AED</span>
-              </div>
-              <div className="text-sm text-text-secondary flex gap-8 w-64 justify-between">
-                <span>Total VAT:</span> <span className="font-mono">{vatTotal.toFixed(2)} AED</span>
-              </div>
-              <div className="text-lg font-bold text-primary-900 flex gap-8 w-64 justify-between mt-2 pt-2 border-t border-border">
-                <span>Invoice Total:</span> <span>{invoiceTotal.toFixed(2)} AED</span>
+              <div className="text-lg font-bold text-primary-900 flex gap-8 w-64 justify-between mt-2 pt-2">
+                <span>Grand Total:</span> <span>{invoiceTotal.toFixed(2)} AED</span>
               </div>
               
               <button 
@@ -293,7 +245,7 @@ export default function NewQuotePage() {
                 disabled={loading}
                 className="mt-6 bg-primary-600 hover:bg-primary-900 text-white font-bold px-8 py-3 rounded-xl shadow-lg transition-all flex items-center gap-2 w-full justify-center disabled:opacity-50"
               >
-                {loading ? "Processing..." : "Save and View PDF Layout"} 
+                {loading ? "Processing..." : "Save and View Quote PDF"} 
                 <FileText className="w-4 h-4" />
               </button>
             </div>

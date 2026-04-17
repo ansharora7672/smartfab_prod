@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, bootstrap_admin
 from app.config import settings
 from app.routers import auth_router, admin_users_router, availability_router, ticket_router
-from app.routers.quotes import quotes_router
+from app.routers.quotes import quotes_router, public_quotes_router
 
 # Start our background email scheduler!
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -110,3 +110,4 @@ app.include_router(admin_users_router)
 app.include_router(availability_router)
 app.include_router(ticket_router)
 app.include_router(quotes_router)
+app.include_router(public_quotes_router)
