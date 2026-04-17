@@ -1,15 +1,15 @@
 import datetime as dt
 import uuid
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, Field
 from app.models.ticket import TicketStatusEnum
 
 # The raw data shared across different ticket events
 class TicketBase(BaseModel):
-    customer_name: str
-    company_name: str
-    company_address: str
+    customer_name: str = Field(min_length=1, max_length=150)
+    company_name: str = Field(min_length=1, max_length=200)
+    company_address: str = Field(min_length=1, max_length=500)
     email: EmailStr 
-    phone_number: str
+    phone_number: str = Field(min_length=8, max_length=20)
     consultation_date: dt.date
     consultation_time: dt.time
 
@@ -34,3 +34,7 @@ class TicketPublic(TicketBase):
     status: TicketStatusEnum
     assigned_to_id: uuid.UUID | None = None
     assignee_name: str | None = None
+
+# Used for admin ticket assignment — keeps user_id in the request body, not the URL
+class TicketAssignRequest(BaseModel):
+    user_id: uuid.UUID

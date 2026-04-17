@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -39,6 +40,7 @@ async def get_current_user(
         )
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     
     # Actually fetch the user from database — this is the key difference!
     user_id = payload.get("sub")
@@ -96,7 +98,7 @@ async def login_user(
         key="access_token",
         value=token,
         httponly=True,       # JS cannot read it
-        secure=False,        # Set True in production (HTTPS only)
+        secure=settings.APP_ENV != "development",  # True in production (HTTPS only), False in dev
         samesite="lax",      # Prevents CSRF from other sites
         max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -139,6 +141,7 @@ async def change_password(
         
     # Hash the NEW password and update the database!
     current_user.hashed_password = hash_password(data.new_password)
+    current_user.updated_at = datetime.now(timezone.utc)
     session.add(current_user)
     await session.commit()
     

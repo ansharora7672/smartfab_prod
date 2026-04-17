@@ -44,7 +44,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
           <Image
-            src="/smartfab_white_logo.png"
+            src="/images/smartfab_white_logo.png"
             alt="SmartFab Lathe"
             width={40}
             height={40}
@@ -84,8 +84,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         >
           Pending Consultations
         </Link>
-
         
+        {/* TRANSITION (Quote Preparation) TAB */}
+        <Link
+          href="/dashboard/transition"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/transition")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Quote Preparation
+        </Link>
+
         {/* New Availability Tab for EVERYONE */}
         <Link
           href="/dashboard/availability"
@@ -141,7 +152,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden print:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -155,14 +166,14 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="fixed flex-col hidden h-screen text-white lg:flex w-64 bg-primary-900">
+      <aside className="fixed flex-col hidden h-screen text-white lg:flex w-64 bg-primary-900 print:hidden">
         {sidebarContent}
       </aside>
 
       {/* MAIN AREA */}
-      <div className="flex flex-col flex-1 min-h-screen lg:ml-64">
+      <div className="flex flex-col flex-1 min-h-screen lg:ml-64 print:ml-0 print:min-h-0 bg-section-bg print:bg-white">
         {/* MOBILE TOP BAR */}
-        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border">
+        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border print:hidden">
           <button onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5 text-text-primary" />
           </button>
@@ -172,7 +183,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="w-5" />
         </header>
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">{children}</main>
       </div>
     </div>
   );

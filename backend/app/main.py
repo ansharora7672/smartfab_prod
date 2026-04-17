@@ -21,6 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, bootstrap_admin
 from app.config import settings
 from app.routers import auth_router, admin_users_router, availability_router, ticket_router
+from app.routers.quotes import quotes_router, public_quotes_router
+
+# Start our background email scheduler!
+from app.services.scheduler import start_scheduler, stop_scheduler
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 
 # ============================================================
@@ -42,11 +50,14 @@ async def lifespan(app: FastAPI):
     await init_db()  # Create database tables
     print(" Database tables initialized")
     await bootstrap_admin()  # Create first admin if DB is empty
+    
+    start_scheduler()
 
     yield  # App is running and handling requests here
 
     # --- SHUTDOWN ---
     print(" Shutting down SmartFab Lathe API")
+    stop_scheduler()
 
 
 # ============================================================
@@ -58,6 +69,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Set up global rate limiting to mitigate DDoS vectors
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ============================================================
 # CORS MIDDLEWARE
@@ -93,3 +109,5 @@ app.include_router(auth_router)
 app.include_router(admin_users_router)
 app.include_router(availability_router)
 app.include_router(ticket_router)
+app.include_router(quotes_router)
+app.include_router(public_quotes_router)

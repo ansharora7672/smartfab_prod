@@ -57,6 +57,24 @@ export default function PendingTicketsPage() {
     }
   };
 
+  const handleMarkCompleted = async (ticket_id: string) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tickets/${ticket_id}/mark_completed`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setFeedback({ type: "error", message: err.detail || "Error completing call." });
+        return;
+      }
+      setFeedback({ type: "success", message: "Call marked successfully! Moved to Quote Prep." });
+      fetchTickets(); // Refresh table so it disappears!
+    } catch {
+      setFeedback({ type: "error", message: "Network error." });
+    }
+  };
+
   // The powerful filter logic based on dropdown
   const filteredTickets = tickets.filter(t => {
     if (filter === "UNASSIGNED") return t.status === "PENDING";
@@ -155,17 +173,29 @@ export default function PendingTicketsPage() {
                   </td>
 
                   {/* Actions / Assignee */}
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-5 align-top">
                     {t.status === "PENDING" ? (
                        <button onClick={() => handleClaimTicket(t.ticket_id)} className="bg-primary-600 hover:bg-primary-900 text-white font-semibold text-xs px-5 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2">
                          Claim Ticket <Check className="w-3.5 h-3.5" />
                        </button>
                     ) : (
-                       <div className="flex flex-col gap-1">
-                         <span className="text-[10px] uppercase font-bold tracking-widest text-[#F59E0B] flex items-center gap-1.5 bg-[#FEF3C7] px-2 py-1 rounded w-fit">
-                           <AlertCircle className="w-3 h-3" /> CLAIMED
-                         </span>
-                         <span className="text-xs font-semibold text-text-secondary">By: {t.assignee_name}</span>
+                       <div className="flex flex-col gap-3">
+                         <div className="flex flex-col gap-1">
+                           <span className="text-[10px] uppercase font-bold tracking-widest text-[#F59E0B] flex items-center gap-1.5 bg-[#FEF3C7] px-2 py-1 rounded w-fit">
+                             <AlertCircle className="w-3 h-3" /> CLAIMED
+                           </span>
+                           <span className="text-xs font-semibold text-text-secondary">By: {t.assignee_name}</span>
+                         </div>
+
+                         {/* Only the ticket owner OR an Admin can mark it completed */}
+                         {(!t.assigned_to_id || user?.id === t.assigned_to_id || user?.role === "ADMIN") && (
+                           <button 
+                             onClick={() => handleMarkCompleted(t.ticket_id)} 
+                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] px-3 py-2 rounded-lg shadow-sm transition-all flex w-fit items-center gap-1.5"
+                           >
+                             Mark Completed <Check className="w-3 h-3" />
+                           </button>
+                         )}
                        </div>
                     )}
                   </td>

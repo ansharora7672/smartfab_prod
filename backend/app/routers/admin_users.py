@@ -13,6 +13,7 @@ from app.database import get_session
 from app.routers.auth import get_current_user
 from app.schemas.admin_users import UserCreateRequest, UserCreateResponse, UserListResponse, UserListItem, UserRoleUpdateRequest, UserStatusUpdateRequest
 from datetime import datetime, timezone
+import asyncio
 from app.services.emails import send_welcome_email
 from email_validator import validate_email, EmailNotValidError
 
@@ -45,16 +46,15 @@ async def create_staff_user(
             detail="A user with this email already exists."
         )
         
-    # EDGE CASE FIX: Validate that the email domain actually exists 
-    # (prevents fake emails like @fsdff.hjghj from being accepted)
+    # EDGE CASE FIX: Validate email format
     try:
-        # check_deliverability=True verifies the domain has MX records setup for email
-        emailinfo = validate_email(data.email.lower(), check_deliverability=True)
+        # We disabled check_deliverability because synchronous DNS checks can indefinitely hang the FastAPI event loop on some systems.
+        emailinfo = validate_email(data.email.lower(), check_deliverability=False)
         validated_email = emailinfo.normalized
     except EmailNotValidError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e) # e.g. "The domain name fsdff.hjghj does not exist"
+            detail=str(e)
         )
     
     # Generate a secure 12-character temporary password
@@ -72,10 +72,11 @@ async def create_staff_user(
     #   NEW WAY: Send email → if it works → create user
     #     If email fails: no user is created, admin gets an error message
     # ---------------------------------------------------------------
-    email_sent = send_welcome_email(
-        to_email=validated_email,
-        full_name=data.full_name,
-        temp_password=temp_password,
+    email_sent = await asyncio.to_thread(
+        send_welcome_email,
+        validated_email,
+        data.full_name,
+        temp_password
     )
     
     if not email_sent:
