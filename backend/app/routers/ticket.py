@@ -31,14 +31,14 @@ async def generate_ticket_id(db: AsyncSession) -> str:
     latest_ticket = result.scalars().first()
     
     if latest_ticket:
-        # If a ticket exists today, grab the last 4 digits and add 1
+        # If a ticket exists today, grab the last digits and add 1
         last_num = int(latest_ticket.ticket_id.split("-")[-1])
         new_num = last_num + 1
     else:
-        # If it's the first ticket of the day, start at 0001
-        new_num = 1
+        # If it's the first ticket of the day, start at 1000
+        new_num = 1000
         
-    # Format the number to exactly 4 digits (e.g., 0012)
+    # Format the number to exactly 4 digits (e.g., 1000, 1001)
     return f"{prefix}{new_num:04d}"
 
 # ---------------------------------------------------------
@@ -155,38 +155,121 @@ async def get_transition_tickets(
     
     response = []
     for ticket, assignee_name in rows:
-        # Get the latest quote for this ticket
-        quote_stmt = (
+        # Get ALL quotes for this ticket (newest first) for version history
+        all_quotes_stmt = (
             select(Quote)
             .where(Quote.ticket_id == ticket.id)
             .order_by(Quote.created_at.desc())
-            .limit(1)
         )
-        quote_result = await db.execute(quote_stmt)
-        latest_quote = quote_result.scalars().first()
+        all_quotes_result = await db.execute(all_quotes_stmt)
+        all_quotes = all_quotes_result.scalars().all()
         
-        ticket_dict = {**ticket.model_dump(), "assignee_name": assignee_name}
+        ticket_dict = {
+            **ticket.model_dump(),
+            "assignee_name": assignee_name,
+            # Include LPO tracking fields for visibility
+            "lpo_number": ticket.lpo_number,
+            "approved_quote_id": str(ticket.approved_quote_id) if ticket.approved_quote_id else None,
+            "quote_approved_at": ticket.quote_approved_at.isoformat() if ticket.quote_approved_at else None,
+        }
         
-        # Attach quote summary if one exists
-        if latest_quote:
-            from app.models.quote import QuoteItem
-            items_stmt = select(func.sum(QuoteItem.total_amount)).where(QuoteItem.quote_id == latest_quote.id)
+        # Build quote summaries
+        from app.models.quote import QuoteItem
+        quotes_list = []
+        for q in all_quotes:
+            items_stmt = select(func.sum(QuoteItem.total_amount)).where(QuoteItem.quote_id == q.id)
             items_res = await db.execute(items_stmt)
             total = items_res.scalar() or 0.0
-
-            ticket_dict["quote"] = {
-                "id": str(latest_quote.id),
-                "invoice_no": latest_quote.quote_no,
-                "status": latest_quote.status.value,
+            
+            quotes_list.append({
+                "id": str(q.id),
+                "quote_no": q.quote_no,
+                "status": q.status.value,
                 "invoice_total": total,
-            }
-        else:
-            ticket_dict["quote"] = None
-
+                "created_at": q.created_at.isoformat(),
+            })
+        
+        # latest_quote = first in the list (already sorted desc), backward compat
+        ticket_dict["quote"] = quotes_list[0] if quotes_list else None
+        ticket_dict["quotes"] = quotes_list
         
         response.append(ticket_dict)
     
     return response
+
+# ---------------------------------------------------------
+# INTERNAL ENDPOINT - Fetch Completed (CLOSED) Tickets with Invoice summaries
+# ---------------------------------------------------------
+@ticket_router.get("/admin/tickets/completed")
+async def get_completed_tickets(
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.invoice import Invoice, InvoiceItem
+    from app.models.quote import Quote, QuoteItem
+
+    statement = (
+        select(Ticket, User.full_name)
+        .outerjoin(User, Ticket.assigned_to_id == User.id)
+        .where(Ticket.status == TicketStatusEnum.CLOSED)
+        .order_by(Ticket.updated_at.desc())
+    )
+    result = await db.execute(statement)
+    rows = result.all()
+
+    response = []
+    for ticket, assignee_name in rows:
+        # Fetch the most recent invoice for this ticket
+        inv_stmt = select(Invoice).where(Invoice.ticket_id == ticket.id).order_by(Invoice.created_at.desc())
+        inv_res = await db.execute(inv_stmt)
+        invoice = inv_res.scalars().first()
+
+        invoice_summary = None
+        if invoice:
+            invoice_summary = {
+                "id": str(invoice.id),
+                "invoice_no": invoice.invoice_no,
+                "status": invoice.status.value,
+                "invoice_total": invoice.invoice_total,
+                "vat_total": invoice.vat_total,
+                "taxable_value": invoice.taxable_value,
+                "payment_terms": invoice.payment_terms,
+                "created_at": invoice.created_at.isoformat(),
+            }
+
+        # Fetch approved quote item count
+        item_count = 0
+        if ticket.approved_quote_id:
+            items_stmt = select(func.count(QuoteItem.id)).where(QuoteItem.quote_id == ticket.approved_quote_id)
+            items_res = await db.execute(items_stmt)
+            item_count = items_res.scalar() or 0
+
+        response.append({
+            **ticket.model_dump(),
+            "assignee_name": assignee_name,
+            "invoice": invoice_summary,
+            "item_count": item_count,
+        })
+
+    return response
+
+
+# ---------------------------------------------------------
+# INTERNAL ENDPOINT - Fetch a Single Ticket by DB ID
+# ---------------------------------------------------------
+@ticket_router.get("/admin/tickets/{id}", response_model=TicketPublic)
+async def get_ticket_by_id(id: str, db: AsyncSession = Depends(get_session), current_user: User = Depends(get_current_user)):
+    try:
+        uuid_val = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ticket UUID parameter.")
+        
+    ticket = await db.get(Ticket, uuid_val)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found.")
+        
+    return ticket
+
 
 
 

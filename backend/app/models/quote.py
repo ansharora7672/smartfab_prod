@@ -15,6 +15,15 @@ class QuoteStatusEnum(str, Enum):
     REJECTED = "REJECTED"
     MODIFICATION_REQUESTED = "MODIFICATION_REQUESTED"
 
+class ProductionStatusEnum(str, Enum):
+    ORDER_RECEIVED = "ORDER_RECEIVED"
+    VENDOR_ASSIGNED = "VENDOR_ASSIGNED"
+    IN_PRODUCTION = "IN_PRODUCTION"
+    QUALITY_CHECK = "QUALITY_CHECK"
+    READY_FOR_DELIVERY = "READY_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
+    COMPLETED = "COMPLETED"
+
 
 class Quote(SQLModel, table=True):
     __tablename__ = "quotes"
@@ -66,5 +75,10 @@ class QuoteItem(SQLModel, table=True):
     u_price: float
     total_amount: float
     
+    # Active Order Tracking (Vendor / Production)
+    vendor_id: Optional[uuid.UUID] = Field(default=None, foreign_key="vendors.id")
+    production_status: ProductionStatusEnum = Field(default=ProductionStatusEnum.ORDER_RECEIVED)
+    
     # Relationships
     quote: Quote = Relationship(back_populates="items")
+    assigned_vendor: Optional["Vendor"] = Relationship(back_populates="assigned_items")

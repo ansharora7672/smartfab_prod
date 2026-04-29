@@ -27,7 +27,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
-from app.services.pdf_generator import generate_quote_pdf
+from app.services.pdf_generator import generate_quote_pdf, generate_delivery_note_pdf, generate_invoice_pdf
 
 from app.config import settings
 
@@ -233,7 +233,7 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
         ticket_data: Dict with ticket/customer fields (customer_name, company_name)
     """
     quote_id = quote_data["id"]
-    invoice_no = quote_data["invoice_no"]
+    quote_no = quote_data.get("quote_no", "")
     
     # Generate signed token for the email action buttons
     token = _generate_quote_response_token(quote_id, to_email)
@@ -244,16 +244,21 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
     reject_url = f"{base_url}?token={token}&action=REJECTED"
     modify_url = f"{base_url}?token={token}&action=MODIFICATION_REQUESTED"
     
+    invoice_total = 0.0
+    
     # Build line items rows for the email table
     items_html = ""
     for item in quote_data.get("items", []):
+        row_total = item.get('total_amount', 0)
+        invoice_total += row_total
+        
         items_html += f"""
         <tr>
             <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155;">{item.get('sr_no', '')}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #0F172A; font-weight: 500;">{item.get('description_of_service', '')}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; text-align: center;">{item.get('quantity', '')}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; text-align: right;">{item.get('rate_excl_vat', 0):.2f}</td>
-            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #0F172A; font-weight: 600; text-align: right;">{item.get('total_incl_vat', 0):.2f}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #0F172A; font-weight: 500;">{item.get('item_description', '')}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; text-align: center;">{item.get('qty', '')}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155; text-align: right;">{item.get('u_price', 0):.2f}</td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #0F172A; font-weight: 600; text-align: right;">{row_total:.2f}</td>
         </tr>
         """
     
@@ -265,8 +270,17 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
         
         <!-- Header -->
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px; letter-spacing: 1px;">MANUFACTURING SERVICES</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <!-- Main Card -->
@@ -283,16 +297,12 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
             <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
-                        <td style="padding: 6px 0; font-size: 13px; color: #64748B;">Invoice No.</td>
-                        <td style="padding: 6px 0; font-size: 14px; color: #0F172A; font-weight: 600; text-align: right;">{invoice_no}</td>
+                        <td style="padding: 6px 0; font-size: 13px; color: #64748B;">Quote No.</td>
+                        <td style="padding: 6px 0; font-size: 14px; color: #0F172A; font-weight: 600; text-align: right;">{quote_no}</td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 0; font-size: 13px; color: #64748B;">Company</td>
                         <td style="padding: 6px 0; font-size: 14px; color: #0F172A; text-align: right;">{company_name}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 0; font-size: 13px; color: #64748B;">Payment Terms</td>
-                        <td style="padding: 6px 0; font-size: 14px; color: #0F172A; text-align: right;">{quote_data.get('payment_terms', 'N/A')}</td>
                     </tr>
                 </table>
             </div>
@@ -316,17 +326,9 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
             <!-- Totals -->
             <div style="margin-top: 16px; padding: 16px 12px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px;">
                 <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 4px 0; font-size: 13px; color: #64748B;">Taxable Value</td>
-                        <td style="padding: 4px 0; font-size: 14px; color: #0F172A; text-align: right;">{quote_data.get('taxable_value', 0):.2f} AED</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 4px 0; font-size: 13px; color: #64748B;">VAT (5%)</td>
-                        <td style="padding: 4px 0; font-size: 14px; color: #0F172A; text-align: right;">{quote_data.get('vat_total', 0):.2f} AED</td>
-                    </tr>
                     <tr style="border-top: 2px solid #1E3A8A;">
-                        <td style="padding: 12px 0 4px 0; font-size: 15px; color: #1E3A8A; font-weight: 700;">INVOICE TOTAL</td>
-                        <td style="padding: 12px 0 4px 0; font-size: 18px; color: #1E3A8A; font-weight: 700; text-align: right;">AED {quote_data.get('invoice_total', 0):.2f}</td>
+                        <td style="padding: 4px 0 4px 0; font-size: 15px; color: #1E3A8A; font-weight: 700;">INVOICE TOTAL</td>
+                        <td style="padding: 4px 0 4px 0; font-size: 18px; color: #1E3A8A; font-weight: 700; text-align: right;">AED {invoice_total:.2f}</td>
                     </tr>
                 </table>
             </div>
@@ -340,15 +342,15 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
             <div>
                 <a href="{approve_url}" 
                    style="display: inline-block; background: #16A34A; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
-                    ✅ Approve Quote
+                    Approve Quote
                 </a>
                 <a href="{modify_url}" 
                    style="display: inline-block; background: #F59E0B; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
-                    🔄 Request Changes
+                    Request Changes
                 </a>
                 <a href="{reject_url}" 
                    style="display: inline-block; background: #DC2626; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
-                    ❌ Decline Quote
+                    Decline Quote
                 </a>
             </div>
         </div>
@@ -370,7 +372,7 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
         msg = MIMEMultipart("mixed")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {invoice_no} — SmartFab Lathe Manufacturing Services"
+        msg["Subject"] = f"Quote {quote_no} — SmartFab Lathe Manufacturing Services"
         
         # Attach the HTML body (the email text the customer sees)
         msg.attach(MIMEText(html_body, "html"))
@@ -378,39 +380,49 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
         # 3. Attach the PDF file
         if pdf_bytes:
             pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
-            pdf_filename = f"SmartFab_Quote_{invoice_no}.pdf"
+            pdf_filename = f"SmartFab_Quote_{quote_no}.pdf"
             pdf_attachment.add_header("Content-Disposition", "attachment", filename=pdf_filename)
             msg.attach(pdf_attachment)
             print(f"  [PDF] Generated {len(pdf_bytes)} bytes for {pdf_filename}")
         else:
-            print(f"  [PDF WARNING] PDF generation failed for {invoice_no}, sending without attachment")
+            print(f"  [PDF WARNING] PDF generation failed for {quote_no}, sending without attachment")
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
             server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
             server.send_message(msg)
 
-        print(f"  [EMAIL] Quote {invoice_no} sent to {to_email}")
+        print(f"  [EMAIL] Quote {quote_no} sent to {to_email}")
         return True
 
     except Exception as e:
-        print(f"  [EMAIL ERROR] Failed to send quote {invoice_no} to {to_email}: {e}")
+        print(f"  [EMAIL ERROR] Failed to send quote {quote_no} to {to_email}: {e}")
         return False
 
 
 # =============================================================================
 # FOLLOW-UP EMAIL — Sent when customer APPROVES the quote
 # =============================================================================
-# This asks the customer to send their Local Purchase Order (LPO).
+# This asks the customer to submit their Local Purchase Order (LPO) number.
 # The LPO is a formal document confirming they want to proceed with the order.
+#
+# APPROACH: Since email clients strip <form> elements, we link to a web page.
+# The JWT token proves the customer's identity (same one from the quote email).
 # =============================================================================
-def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: str) -> bool:
+def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: str, token: str) -> bool:
+    """
+    Now accepts a `token` parameter — the JWT that identifies the quote + customer.
+    The email contains a button that links to /lpo-submit?token=TOKEN
+    where the customer can type their LPO number in a web form.
+    """
+    lpo_submit_url = f"{settings.FRONTEND_URL}/lpo-submit?token={token}"
+    
     html_body = f"""
     <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
         <div style="text-align: center; margin-bottom: 32px;">
             <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
             <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Services</p>
         </div>
-
+        
         <div style="background: #DCFCE7; border: 1px solid rgba(22,163,74,0.2); border-radius: 16px; padding: 32px; margin-bottom: 24px;">
             <p style="font-size: 15px; color: #334155; margin: 0 0 12px 0;">
                 Hi <strong>{customer_name}</strong>,
@@ -418,20 +430,32 @@ def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: 
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
                 Thank you for approving Quote <strong>{invoice_no}</strong>! We're excited to get started on your project.
             </p>
-            <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
-                To proceed, we need your <strong>Local Purchase Order (LPO)</strong>. Please send it to us via email at:
+            <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 24px 0;">
+                To proceed, we need your <strong>Local Purchase Order (LPO) number</strong>. Please click the button below to submit it:
             </p>
-            <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748B; margin: 0 0 6px 0; font-weight: 600;">Send your LPO to</p>
-                <a href="mailto:lathe.smartfab@gmail.com" style="font-size: 16px; font-weight: 700; color: #2563EB; text-decoration: none;">
-                    lathe.smartfab@gmail.com
+            
+            <!-- PRIMARY CTA — Submit LPO Number -->
+            <div style="text-align: center; margin-bottom: 24px;">
+                <a href="{lpo_submit_url}" 
+                   style="display: inline-block; background: #2563EB; color: #FFFFFF; padding: 14px 40px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;">
+                    Submit Your LPO Number
                 </a>
             </div>
+            
+            <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px;">
+                <p style="font-size: 12px; color: #64748B; margin: 0; line-height: 1.6;">
+                    Alternatively, you can send your LPO document to<br/>
+                    <a href="mailto:lathe.smartfab@gmail.com" style="font-weight: 700; color: #2563EB; text-decoration: none;">
+                        lathe.smartfab@gmail.com
+                    </a>
+                </p>
+            </div>
+            
             <p style="font-size: 13px; color: #64748B; line-height: 1.6; margin: 0;">
                 Once we receive your LPO, we'll begin coordinating with our vendors and start production. You'll receive updates at every stage.
             </p>
         </div>
-
+        
         <p style="font-size: 11px; color: #94A3B8; text-align: center; margin: 0; line-height: 1.6;">
             SmartFab Lathe · Industrial 2, Ajman, UAE · +971 542133637
         </p>
@@ -442,7 +466,7 @@ def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: 
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {invoice_no} Approved — Please Send Your LPO"
+        msg["Subject"] = f"Quote {invoice_no} Approved — Submit Your LPO"
         msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -570,4 +594,274 @@ def send_modification_followup_email(to_email: str, customer_name: str, invoice_
         return True
     except Exception as e:
         print(f"  [EMAIL ERROR] Modification follow-up failed for {to_email}: {e}")
+        return False
+
+
+# =============================================================================
+# NOTIFICATION TO STAFF — Quote Responded
+# =============================================================================
+def send_staff_quote_response_notification(
+    staff_email: str, staff_name: str, quote_no: str, action: str, customer_name: str
+) -> bool:
+    action_text = "APPROVED"
+    color = "#16A34A"
+    next_step = "The client will submit their LPO soon."
+
+    if action == "REJECTED":
+        action_text = "DECLINED"
+        color = "#DC2626"
+        next_step = "The client has declined the quote. Please investigate what went wrong."
+    elif action == "MODIFICATION_REQUESTED":
+        action_text = "REQUESTED MODIFICATIONS FOR"
+        color = "#F59E0B"
+        next_step = "Please contact the client manually to understand their needs and draft a new revision (-R2)."
+
+    html_body = f"""
+    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+        <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
+            <p style="font-size: 15px; color: #334155; margin: 0 0 12px 0;">
+                Hi <strong>{staff_name}</strong>,
+            </p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
+                Customer <strong>{customer_name}</strong> has
+                <strong style="color: {color};">{action_text}</strong> Quote <strong>{quote_no}</strong>.
+            </p>
+            <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <p style="font-size: 13px; color: #334155; margin: 0; line-height: 1.6;">
+                    <strong>Next Action Required:</strong> {next_step}
+                </p>
+            </div>
+            <p style="font-size: 13px; color: #64748B; line-height: 1.6; margin: 0;">
+                Please log into the SmartFab Dashboard to review the transition stage.
+            </p>
+        </div>
+        <p style="font-size: 12px; color: #94A3B8; text-align: center; margin: 0;">
+            SmartFab Lathe — Internal Notification
+        </p>
+    </div>
+    """
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = staff_email
+        msg["Subject"] = f"Action Required: Quote {quote_no} {action_text}"
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Staff quote response notification sent to {staff_email}")
+        return True
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Staff notification failed for {staff_email}: {e}")
+        return False
+
+
+# =============================================================================
+# VENDOR RFQ EMAIL
+# =============================================================================
+def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict) -> bool:
+    note_no = note_data.get("note_no", "")
+    version = note_data.get("version", 1)
+    company_name = note_data.get("company_name", "")
+    order_no = note_data.get("order_no", "")
+    lpo_no = note_data.get("lpo_no", "")
+    note_date = note_data.get("note_date", "")
+    items = note_data.get("items", [])
+
+    rows_html = ""
+    for item in items:
+        rows_html += f"""
+        <tr>
+            <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#334155;text-align:center;">{item.get('sr_no','')}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#0F172A;font-weight:500;">{item.get('item_description','')}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#334155;text-align:center;">{item.get('qty','')}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#334155;">{item.get('remark','')}</td>
+        </tr>
+        """
+
+    html_body = f"""
+    <div style="font-family:'Inter',Arial,sans-serif;max-width:640px;margin:0 auto;padding:40px 24px;color:#0F172A;background:#FFFFFF;">
+        <div style="text-align:center;margin-bottom:32px;">
+            <h1 style="color:#1E3A8A;font-size:28px;font-weight:900;margin:0;letter-spacing:2px;">SMARTFAB</h1>
+            <p style="color:#1E3A8A;font-weight:800;font-size:14px;letter-spacing:5px;margin:4px 0;">LATHE</p>
+            <p style="font-size:10px;color:#1E3A8A;margin-top:4px;letter-spacing:1px;font-weight:700;text-transform:uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        </div>
+
+        <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:16px;padding:32px;margin-bottom:24px;">
+            <p style="font-size:15px;color:#334155;margin:0 0 8px 0;">Dear <strong>{customer_name}</strong>,</p>
+            <p style="font-size:14px;color:#334155;line-height:1.6;margin:0 0 24px 0;">
+                Please find below your delivery note <strong>{note_no}</strong> (Version {version}). Your items are on their way.
+            </p>
+
+            <div style="background:#FFFFFF;border:1px solid #CBD5E1;border-radius:12px;padding:20px;margin-bottom:24px;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Delivery Note No.</td><td style="padding:6px 0;font-size:14px;color:#0F172A;font-weight:600;text-align:right;">{note_no}</td></tr>
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Company</td><td style="padding:6px 0;font-size:14px;color:#0F172A;text-align:right;">{company_name}</td></tr>
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Order No.</td><td style="padding:6px 0;font-size:14px;color:#0F172A;text-align:right;">{order_no}</td></tr>
+                    {"<tr><td style='padding:6px 0;font-size:13px;color:#64748B;'>LPO No.</td><td style='padding:6px 0;font-size:14px;color:#0F172A;text-align:right;'>" + lpo_no + "</td></tr>" if lpo_no else ""}
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Date</td><td style="padding:6px 0;font-size:14px;color:#0F172A;text-align:right;">{note_date}</td></tr>
+                </table>
+            </div>
+
+            <table style="width:100%;border-collapse:collapse;background:#FFFFFF;border:1px solid #CBD5E1;border-radius:8px;overflow:hidden;">
+                <thead>
+                    <tr style="background:#F1F5F9;">
+                        <th style="padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748B;font-weight:600;text-align:center;">#</th>
+                        <th style="padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748B;font-weight:600;text-align:left;">Item Description</th>
+                        <th style="padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748B;font-weight:600;text-align:center;">Qty</th>
+                        <th style="padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748B;font-weight:600;text-align:left;">Remark</th>
+                    </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+        </div>
+
+        <p style="font-size:13px;color:#334155;text-align:center;margin:0 0 8px 0;">
+            If you have any questions, contact us at <a href="mailto:lathe.smartfab@gmail.com" style="color:#2563EB;">lathe.smartfab@gmail.com</a> or call +971 542133637.
+        </p>
+        <p style="font-size:11px;color:#94A3B8;text-align:center;margin:0;line-height:1.6;">
+            SmartFab Lathe · Industrial 2, Ajman, UAE · +971 542133637
+        </p>
+    </div>
+    """
+
+    try:
+        pdf_bytes = generate_delivery_note_pdf(note_data)
+
+        msg = MIMEMultipart("mixed")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = f"Delivery Note {note_no} — SmartFab Lathe"
+        msg.attach(MIMEText(html_body, "html"))
+
+        if pdf_bytes:
+            pdf_att = MIMEApplication(pdf_bytes, _subtype="pdf")
+            pdf_att.add_header("Content-Disposition", "attachment", filename=f"SmartFab_DeliveryNote_{note_no}.pdf")
+            msg.attach(pdf_att)
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Delivery note {note_no} sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Failed to send delivery note {note_no} to {to_email}: {e}")
+        return False
+
+
+def send_invoice_email(to_email: str, customer_name: str, invoice_data: dict, ticket_data: dict) -> bool:
+    invoice_no = invoice_data.get("invoice_no", "")
+    company_name = ticket_data.get("company_name", "")
+    invoice_total = invoice_data.get("invoice_total", 0)
+
+    html_body = f"""
+    <div style="font-family:'Inter',Arial,sans-serif;max-width:640px;margin:0 auto;padding:40px 24px;color:#0F172A;background:#FFFFFF;">
+        <div style="text-align:center;margin-bottom:32px;">
+            <h1 style="color:#1E3A8A;font-size:28px;font-weight:900;margin:0;letter-spacing:2px;">SMARTFAB</h1>
+            <p style="color:#1E3A8A;font-weight:800;font-size:14px;letter-spacing:5px;margin:4px 0;">LATHE</p>
+            <p style="font-size:10px;color:#1E3A8A;margin-top:4px;letter-spacing:1px;font-weight:700;text-transform:uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:16px;padding:32px;margin-bottom:24px;">
+            <p style="font-size:15px;color:#334155;margin:0 0 8px 0;">Dear <strong>{customer_name}</strong>,</p>
+            <p style="font-size:14px;color:#334155;line-height:1.6;margin:0 0 24px 0;">
+                Please find attached your Commercial Invoice <strong>{invoice_no}</strong> from SmartFab Lathe. Thank you for your business.
+            </p>
+            <div style="background:#FFFFFF;border:1px solid #CBD5E1;border-radius:12px;padding:20px;margin-bottom:16px;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Invoice No.</td><td style="padding:6px 0;font-size:14px;color:#0F172A;font-weight:600;text-align:right;">{invoice_no}</td></tr>
+                    <tr><td style="padding:6px 0;font-size:13px;color:#64748B;">Company</td><td style="padding:6px 0;font-size:14px;color:#0F172A;text-align:right;">{company_name}</td></tr>
+                    <tr style="border-top:2px solid #1E3A8A;">
+                        <td style="padding:8px 0 4px 0;font-size:14px;color:#1E3A8A;font-weight:700;">Invoice Total</td>
+                        <td style="padding:8px 0 4px 0;font-size:16px;color:#1E3A8A;font-weight:700;text-align:right;">AED {invoice_total:.2f}</td>
+                    </tr>
+                </table>
+            </div>
+            <p style="font-size:13px;color:#334155;margin:0;">
+                The PDF invoice is attached to this email. For any queries, contact us at
+                <a href="mailto:lathe.smartfab@gmail.com" style="color:#2563EB;">lathe.smartfab@gmail.com</a> or +971 542133637.
+            </p>
+        </div>
+        <p style="font-size:11px;color:#94A3B8;text-align:center;margin:0;">SmartFab Lathe · Industrial 2, Ajman, UAE</p>
+    </div>
+    """
+
+    try:
+        pdf_bytes = generate_invoice_pdf(invoice_data, ticket_data)
+
+        msg = MIMEMultipart("mixed")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = f"Commercial Invoice {invoice_no} — SmartFab Lathe"
+        msg.attach(MIMEText(html_body, "html"))
+
+        if pdf_bytes:
+            pdf_att = MIMEApplication(pdf_bytes, _subtype="pdf")
+            pdf_att.add_header("Content-Disposition", "attachment", filename=f"SmartFab_Invoice_{invoice_no}.pdf")
+            msg.attach(pdf_att)
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Invoice {invoice_no} sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Failed to send invoice {invoice_no} to {to_email}: {e}")
+        return False
+
+
+def send_vendor_inquiry_email(
+    to_email: str,
+    vendor_name: str,
+    sender_name: str,
+    subject: str,
+    item_name: str,
+    item_description: str,
+    quantity: int,
+    message: str,
+) -> bool:
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color:#0F172A;">
+      <h2 style="color:#1E3A8A;">SmartFab Lathe — Vendor Inquiry</h2>
+      <p>Hi <strong>{vendor_name}</strong>,</p>
+      <p>We would like to request your price quote for the following:</p>
+      <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+        <tr style="background: #F1F5F9;">
+          <td style="padding: 10px 14px; font-weight: bold; border: 1px solid #CBD5E1;">Item</td>
+          <td style="padding: 10px 14px; border: 1px solid #CBD5E1;">{item_name}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 14px; font-weight: bold; border: 1px solid #CBD5E1;">Description</td>
+          <td style="padding: 10px 14px; border: 1px solid #CBD5E1;">{item_description or 'N/A'}</td>
+        </tr>
+        <tr style="background: #F1F5F9;">
+          <td style="padding: 10px 14px; font-weight: bold; border: 1px solid #CBD5E1;">Quantity</td>
+          <td style="padding: 10px 14px; border: 1px solid #CBD5E1;">{quantity}</td>
+        </tr>
+      </table>
+      {f'<p style="color:#334155;">{message}</p>' if message else ''}
+      <p>Please reply with your pricing, lead time, and availability at your earliest convenience.</p>
+      <p>Regards,<br/><strong>{sender_name}</strong><br/>SmartFab Lathe<br/>lathe.smartfab@gmail.com</p>
+    </div>
+    """
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Vendor inquiry sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Failed to send vendor inquiry to {to_email}: {e}")
         return False
