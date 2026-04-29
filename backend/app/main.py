@@ -20,8 +20,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db, bootstrap_admin
 from app.config import settings
-from app.routers import auth_router, admin_users_router, availability_router, ticket_router
+from app.routers import auth_router, admin_users_router, availability_router, ticket_router, vendors_router, drivers_router, active_orders_router, invoices_router, track_order_router
 from app.routers.quotes import quotes_router, public_quotes_router
+from app.routers.dashboard import dashboard_router
+
+# Import models so SQLModel metadata registers them before initialization
+from app.models.vendor import Vendor
+from app.models.driver import Driver
+from app.models.delivery import DeliveryAssignment, DeliveryNote, DeliveryNoteItem
 
 # Start our background email scheduler!
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -111,3 +117,9 @@ app.include_router(availability_router)
 app.include_router(ticket_router)
 app.include_router(quotes_router)
 app.include_router(public_quotes_router)
+app.include_router(vendors_router)
+app.include_router(drivers_router)
+app.include_router(active_orders_router)
+app.include_router(invoices_router)
+app.include_router(dashboard_router)
+app.include_router(track_order_router)

@@ -96,6 +96,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         >
           Quote Preparation
         </Link>
+        
+        {/* VENDORS TAB */}
+        <Link
+          href="/dashboard/vendors"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/vendors")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Vendors
+        </Link>
 
         {/* New Availability Tab for EVERYONE */}
         <Link
@@ -107,6 +119,48 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           }`}
         >
           My Availability
+        </Link>
+
+
+        <Link
+          href="/dashboard/active-orders"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/active-orders")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Active Orders
+        </Link>
+        <Link
+          href="/dashboard/completed"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/completed")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Completed Orders
+        </Link>
+        <Link
+          href="/dashboard/vendors"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/vendors")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Vendors
+        </Link>
+        <Link
+          href="/dashboard/drivers"
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
+            pathname.startsWith("/dashboard/drivers")
+              ? "text-white bg-white/10"
+              : "text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          Drivers
         </Link>
 
         {/* Admin Only Layer */}

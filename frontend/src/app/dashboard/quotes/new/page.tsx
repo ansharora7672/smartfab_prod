@@ -50,6 +50,41 @@ export default function NewQuotePage() {
     }
   }, [feedback]);
 
+  // Pre-fill the Quote Details if coming from a ticket link
+  useEffect(() => {
+    const fetchTicketData = async () => {
+      if (!ticket_id) return;
+      
+      try {
+        setLoading(true);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tickets/${ticket_id}`, {
+          // Send credentials to access the internal endpoint securely
+          credentials: "include" 
+        });
+        
+        if (!res.ok) throw new Error("Could not fetch ticket details");
+        
+        const data = await res.json();
+        
+        // Populate the editable form fields!
+        setCompanyName(data.company_name || "");
+        setAddress(data.company_address || "");
+        setPhoneNo(data.phone_number || "");
+        
+        // If an LPO already happened somehow, prepopulate that too
+        if (data.lpo_number) setLpoNo(data.lpo_number);
+
+      } catch (err: any) {
+        console.error(err);
+        setFeedback({ type: "error", message: "Failed to load pre-fill data. You can enter them manually." });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTicketData();
+  }, [ticket_id]);
+
   const handleAddItem = () => {
     setItems([
       ...items,

@@ -14,11 +14,13 @@ from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User, UserRole
 from app.routers.auth import get_current_user
 from app.schemas.quote import QuoteCreate
+from app.schemas.lpo import LPOSubmitRequest, LPOStaffEntryRequest
 from app.services.emails import (
     send_quote_email,
     send_approval_followup_email,
     send_rejection_followup_email,
     send_modification_followup_email,
+    send_staff_quote_response_notification
 )
 from app.config import settings
 
@@ -37,7 +39,13 @@ async def create_quote(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found.")
         
-    if ticket.status not in [TicketStatusEnum.CALL_COMPLETED, TicketStatusEnum.IN_QUOTE_PREPARATION]:
+    # Allow CLOSED tickets to get new revisions (customer changed their mind / re-engagement)
+    allowed_statuses = [
+        TicketStatusEnum.CALL_COMPLETED,
+        TicketStatusEnum.IN_QUOTE_PREPARATION,
+        TicketStatusEnum.CLOSED,
+    ]
+    if ticket.status not in allowed_statuses:
         raise HTTPException(
             status_code=400, 
             detail="Cannot create a quote for a ticket that has not completed its consultation."
@@ -45,6 +53,24 @@ async def create_quote(
 
     quote_data_dict = data.model_dump(exclude={"items"})
     
+    # --- SINGLE DRAFT RULE ---
+    # If a draft already exists for this ticket, overwrite/delete it so we don't spam the version history
+    draft_stmt = select(Quote).where(Quote.ticket_id == data.ticket_id, Quote.status == QuoteStatusEnum.DRAFT)
+    draft_res = await db.execute(draft_stmt)
+    existing_draft = draft_res.scalars().first()
+    
+    if existing_draft:
+        # Clean up old draft items first
+        items_del_stmt = select(QuoteItem).where(QuoteItem.quote_id == existing_draft.id)
+        items_del_res = await db.execute(items_del_stmt)
+        for old_item in items_del_res.scalars().all():
+            await db.delete(old_item)
+            
+        # Delete old draft quote
+        await db.delete(existing_draft)
+        await db.flush() # Force it out of the active transaction right now
+
+    # Count REMAINING quotes (which are exactly the ones submitted/sent) to determine revision number
     count_stmt = select(func.count()).where(Quote.ticket_id == data.ticket_id)
     count_result = await db.execute(count_stmt)
     existing_count = count_result.scalar() or 0
@@ -66,7 +92,8 @@ async def create_quote(
         db.add(new_item)
         created_items_data.append(item_data.model_dump())
         
-    if ticket.status == TicketStatusEnum.CALL_COMPLETED:
+    # Move ticket to IN_QUOTE_PREPARATION (handles both fresh and reopened tickets)
+    if ticket.status in [TicketStatusEnum.CALL_COMPLETED, TicketStatusEnum.CLOSED]:
         ticket.status = TicketStatusEnum.IN_QUOTE_PREPARATION
         db.add(ticket)
     
@@ -149,6 +176,7 @@ async def get_single_quote(
             "id": str(quote.id),
             "ticket_id": str(quote.ticket_id),
             "quote_no": quote.quote_no,
+        "invoice_no": quote.quote_no,
             "company_name": quote.company_name,
             "address": quote.address,
             "phone_no": quote.phone_no,
@@ -198,6 +226,7 @@ async def send_quote_to_client(
     quote_data = {
         "id": str(quote.id),
         "quote_no": quote.quote_no,
+        "invoice_no": quote.quote_no,
         "company_name": quote.company_name,
         "address": quote.address,
         "phone_no": quote.phone_no,
@@ -213,6 +242,10 @@ async def send_quote_to_client(
                 "qty": i.qty,
                 "u_price": i.u_price,
                 "total_amount": i.total_amount,
+                "description_of_service": i.item_description,
+                "quantity": i.qty,
+                "rate_excl_vat": i.u_price,
+                "total_incl_vat": i.total_amount,
             } for i in items
         ]
     }
@@ -223,18 +256,18 @@ async def send_quote_to_client(
         "phone_number": ticket.phone_number,
     }
     
-    threading.Thread(
-        target=send_quote_email,
-        args=(ticket.email, quote_data, ticket_data),
-        daemon=True
-    ).start()
+    # Execute email synchronously to ensure it actually works
+    email_success = send_quote_email(ticket.email, quote_data, ticket_data)
+    
+    if not email_success:
+        raise HTTPException(status_code=500, detail="Failed to send the email. Please check the STMP Server configuration.")
     
     quote.status = QuoteStatusEnum.SENT
     quote.updated_at = dt.datetime.now(dt.timezone.utc)
     db.add(quote)
     await db.commit()
     
-    return {"message": f"Quote {quote.quote_no} is being sent to {ticket.email}"}
+    return {"message": f"Quote {quote.quote_no} was successfully sent to {ticket.email}"}
 
 
 # =============================================================================
@@ -288,10 +321,17 @@ async def respond_to_quote(
     
     ticket = await db.get(Ticket, quote.ticket_id)
     
-    if action == "REJECTED" and ticket:
-        ticket.status = TicketStatusEnum.CLOSED
-        ticket.updated_at = dt.datetime.now(dt.timezone.utc)
-        db.add(ticket)
+    if ticket:
+        if action == "REJECTED":
+            ticket.status = TicketStatusEnum.CLOSED
+            ticket.updated_at = dt.datetime.now(dt.timezone.utc)
+            db.add(ticket)
+        elif action == "APPROVED":
+            ticket.status = TicketStatusEnum.ACTIVE_ORDER
+            ticket.approved_quote_id = quote.id
+            ticket.quote_approved_at = dt.datetime.now(dt.timezone.utc)
+            ticket.updated_at = dt.datetime.now(dt.timezone.utc)
+            db.add(ticket)
     
     await db.commit()
     
@@ -303,7 +343,7 @@ async def respond_to_quote(
         if action == "APPROVED":
             threading.Thread(
                 target=send_approval_followup_email,
-                args=(customer_email, customer_name, quote_no),
+                args=(customer_email, customer_name, quote_no, token),
                 daemon=True
             ).start()
         elif action == "REJECTED":
@@ -318,6 +358,16 @@ async def respond_to_quote(
                 args=(customer_email, customer_name, quote_no),
                 daemon=True
             ).start()
+            
+        # Also notify the staff member who claimed the ticket
+        if ticket.assigned_to_id:
+            assignee = await db.get(User, ticket.assigned_to_id)
+            if assignee:
+                threading.Thread(
+                    target=send_staff_quote_response_notification,
+                    args=(assignee.email, assignee.full_name, quote_no, action, customer_name),
+                    daemon=True
+                ).start()
     
     messages = {
         "APPROVED": "Thank you! Your quote has been approved. Our team will contact you shortly to proceed with the Local Purchase Order (LPO).",
@@ -326,3 +376,153 @@ async def respond_to_quote(
     }
     
     return {"message": messages[action], "status": action}
+
+
+# =============================================================================
+# PUBLIC ENDPOINT — Check if LPO is already submitted
+# =============================================================================
+@public_quotes_router.get("/lpo-status")
+async def check_lpo_status(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session)
+):
+    """
+    Called when the customer opens the /lpo-submit page.
+    Checks if the LPO was already manually entered by staff to prevent
+    the customer from seeing the form unnecessarily.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        quote_id = payload["quote_id"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="This link has expired.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Invalid link.")
+    
+    quote = await db.get(Quote, uuid.UUID(quote_id))
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+        
+    ticket = await db.get(Ticket, quote.ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Associated ticket not found")
+
+    return {
+        "already_submitted": ticket.lpo_number is not None,
+        "lpo_number": ticket.lpo_number,
+        "quote_status": quote.status.value
+    }
+
+
+# =============================================================================
+# PUBLIC ENDPOINT — Customer submits LPO number via web form
+# =============================================================================
+@public_quotes_router.post("/submit-lpo")
+async def submit_lpo(
+    data: LPOSubmitRequest,
+    db: AsyncSession = Depends(get_session)
+):
+    """
+    After a customer approves a quote, they receive an email with a link
+    to submit their LPO number. This endpoint handles that submission.
+    
+    Flow: Decode JWT → validate quote is APPROVED → save LPO on ticket → move to ACTIVE_ORDER
+    """
+    # Decode the JWT token (same token format as quote response)
+    try:
+        payload = jwt.decode(data.token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        quote_id = payload["quote_id"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="This link has expired. Please contact SmartFab Lathe.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Invalid link.")
+    
+    quote = await db.get(Quote, uuid.UUID(quote_id))
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    if quote.status != QuoteStatusEnum.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="This quote must be approved before submitting an LPO."
+        )
+    
+    ticket = await db.get(Ticket, quote.ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Associated ticket not found")
+    
+    # Uniqueness: reject if another ticket already has this LPO number
+    lpo_stripped = data.lpo_number.strip()
+    dup_result = await db.execute(
+        select(Ticket).where(
+            Ticket.lpo_number == lpo_stripped,
+            Ticket.id != ticket.id
+        )
+    )
+    if dup_result.scalars().first():
+        raise HTTPException(
+            status_code=409,
+            detail="This LPO number is already registered to another order. Please verify and try again."
+        )
+
+    # Idempotent: if LPO already submitted, update it and confirm
+    already_submitted = ticket.lpo_number is not None
+
+    ticket.lpo_number = lpo_stripped
+    # Status is already ACTIVE_ORDER from quote approval — this is safe to re-set
+    ticket.status = TicketStatusEnum.ACTIVE_ORDER
+    db.add(ticket)
+    await db.commit()
+    
+    if already_submitted:
+        return {
+            "message": f"LPO number updated to '{data.lpo_number}'. Your order is active.",
+            "status": "UPDATED"
+        }
+    
+    return {
+        "message": "Thank you! Your LPO has been recorded and your order is now active. Our team will begin processing immediately.",
+        "status": "SUBMITTED"
+    }
+
+
+# =============================================================================
+# ADMIN ENDPOINT — Staff manually enters LPO number from the dashboard
+# =============================================================================
+@quotes_router.patch("/{quote_id}/enter-lpo")
+async def staff_enter_lpo(
+    quote_id: uuid.UUID,
+    data: LPOStaffEntryRequest,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    When a customer emails their LPO instead of using the web form,
+    staff can manually enter the LPO number from the dashboard.
+    
+    Same logic as the public endpoint but authenticated via cookie.
+    """
+    quote = await db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    if quote.status != QuoteStatusEnum.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Only approved quotes can have an LPO attached."
+        )
+    
+    ticket = await db.get(Ticket, quote.ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Associated ticket not found")
+    
+    ticket.lpo_number = data.lpo_number.strip()
+    ticket.approved_quote_id = quote.id
+    ticket.quote_approved_at = ticket.quote_approved_at or dt.datetime.now(dt.timezone.utc)
+    ticket.status = TicketStatusEnum.ACTIVE_ORDER
+    db.add(ticket)
+    await db.commit()
+    
+    return {
+        "message": f"LPO '{data.lpo_number}' recorded. Ticket {ticket.ticket_id} is now an active order."
+    }

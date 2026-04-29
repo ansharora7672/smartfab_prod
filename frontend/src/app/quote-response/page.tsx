@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 // =============================================================================
 // Quote Response Page — PUBLIC (no login required)
 // =============================================================================
-// When a customer receives a quote email, they click one of 3 buttons:
-//   ✅ Approve Quote   → action=APPROVED
-//   🔄 Request Changes → action=MODIFICATION_REQUESTED  
-//   ❌ Decline Quote   → action=REJECTED
-//
-// Each button links to:
-//   /quote-response?token=JWT_TOKEN&action=APPROVED
-//
-// This page:
-//   1. Reads the token + action from the URL
-//   2. Sends them to the backend GET /public/quotes/respond
-//   3. Shows a branded confirmation message
+// Customers click approve/decline/modify links in the quote email.
+// This page reads token + action from the URL, calls the backend, and
+// shows a branded confirmation message.
 // =============================================================================
 
 function QuoteResponseContent() {
@@ -66,24 +57,38 @@ function QuoteResponseContent() {
     submitResponse();
   }, [token, action]);
 
-  // Visual config based on the action
-  const actionConfig: Record<string, { icon: string; title: string; color: string; bgColor: string; borderColor: string }> = {
+  const actionConfig: Record<string, { icon: React.ReactNode; title: string; color: string; bgColor: string; borderColor: string }> = {
     APPROVED: {
-      icon: "✅",
+      icon: (
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12l3 3 5-5" />
+        </svg>
+      ),
       title: "Quote Approved",
       color: "#16A34A",
       bgColor: "#DCFCE7",
       borderColor: "#16A34A",
     },
     REJECTED: {
-      icon: "❌",
+      icon: (
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M15 9l-6 6M9 9l6 6" />
+        </svg>
+      ),
       title: "Quote Declined",
       color: "#DC2626",
       bgColor: "#FEE2E2",
       borderColor: "#DC2626",
     },
     MODIFICATION_REQUESTED: {
-      icon: "🔄",
+      icon: (
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+      ),
       title: "Changes Requested",
       color: "#92400E",
       bgColor: "#FEF3C7",
@@ -92,7 +97,12 @@ function QuoteResponseContent() {
   };
 
   const config = actionConfig[action || ""] || {
-    icon: "⚠️",
+    icon: (
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4M12 16h.01" />
+      </svg>
+    ),
     title: "Unknown Action",
     color: "#64748B",
     bgColor: "#F1F5F9",
@@ -133,7 +143,7 @@ function QuoteResponseContent() {
                 className="py-8 text-center"
                 style={{ backgroundColor: config.bgColor }}
               >
-                <span className="text-5xl block mb-3">{config.icon}</span>
+                <div className="flex justify-center mb-3">{config.icon}</div>
                 <h2
                   className="text-xl font-bold"
                   style={{ color: config.color }}
@@ -180,7 +190,11 @@ function QuoteResponseContent() {
           {status === "already_done" && (
             <div className="p-0">
               <div className="py-8 text-center bg-[#DBEAFE]">
-                <span className="text-5xl block mb-3">ℹ️</span>
+                <div className="flex justify-center mb-3">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                </div>
                 <h2 className="text-xl font-bold text-[#2563EB]">
                   Already Responded
                 </h2>
@@ -204,7 +218,11 @@ function QuoteResponseContent() {
           {/* Error State */}
           {status === "error" && (
             <div className="p-12 text-center">
-              <span className="text-4xl block mb-4">⚠️</span>
+              <div className="flex justify-center mb-4">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>
+                </svg>
+              </div>
               <h2 className="text-lg font-bold text-[#DC2626] mb-2">Something Went Wrong</h2>
               <p className="text-sm text-[#334155] leading-relaxed max-w-sm mx-auto">
                 {message}

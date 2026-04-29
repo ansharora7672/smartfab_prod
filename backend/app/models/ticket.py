@@ -29,6 +29,11 @@ class Ticket(SQLModel, table=True):
         sa_column=Column(sa.DateTime(timezone=True), nullable=False)
     )
     
+    updated_at: dt.datetime = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc),
+        sa_column=Column(sa.DateTime(timezone=True), nullable=False)
+    )
+    
     # Form Details
     customer_name: str
     company_name: str
@@ -51,6 +56,17 @@ class Ticket(SQLModel, table=True):
         sa_column=Column(sa.DateTime(timezone=True), nullable=True)
     )
     completion_prompt_sent_at: Optional[dt.datetime] = Field(
+        default=None,
+        sa_column=Column(sa.DateTime(timezone=True), nullable=True)
+    )
+    
+    # ── LPO & Approval Tracking ──
+    # Which quote version the customer approved
+    approved_quote_id: Optional[uuid.UUID] = Field(default=None)
+    # The customer's Local Purchase Order number (submitted after approval)
+    lpo_number: Optional[str] = Field(default=None)
+    # When the quote was approved
+    quote_approved_at: Optional[dt.datetime] = Field(
         default=None,
         sa_column=Column(sa.DateTime(timezone=True), nullable=True)
     )

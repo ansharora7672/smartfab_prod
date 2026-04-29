@@ -19,6 +19,17 @@ export default function QuotePDFView() {
 
   const [quote, setQuote] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Auto-dismiss alerts
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,20 +50,70 @@ export default function QuotePDFView() {
 
   const handlePrint = () => window.print();
 
+  const handleSendEmail = async () => {
+    setSending(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/quotes/${quote_id}/send`, {
+        method: "POST",
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to send quote");
+      setFeedback({ type: "success", message: "Successfully emailed Quote to Client!" });
+      setQuote({ ...quote, status: "SENT" });
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to send email." });
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) return <div className="p-10 font-bold text-center">Loading Print View...</div>;
 
   return (
     <div className="w-full min-h-screen bg-neutral-100 flex flex-col items-center py-8 print:py-0 print:bg-white print:min-h-0 text-black overflow-y-auto">
       <style type="text/css" media="print">{`@page { size: A4; margin: 0mm; } body { margin: 0px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`}</style>
       
+      {/* Alert Banner */}
+      {feedback && (
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-xl border text-sm font-medium flex items-center gap-3 shadow-lg transition-all print:hidden
+          ${feedback.type === "success" ? "bg-[#DCFCE7] border-[#16A34A]/20 text-[#16A34A]" : "bg-[#FEE2E2] border-[#DC2626]/20 text-[#DC2626]"}`}
+        >
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
       {/* Non-Printable Action Bar */}
       <div className="w-[210mm] flex justify-between items-center mb-6 print:hidden">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-sm font-semibold text-muted hover:text-primary-900 border bg-white px-4 py-2 rounded-lg shadow-sm">
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
-        <button onClick={handlePrint} className="flex items-center gap-2 text-sm font-bold text-white bg-primary-600 hover:bg-primary-900 px-6 py-2.5 rounded-lg shadow-md transition-colors">
-          <Printer className="w-4 h-4" /> Print / Save as PDF
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-sm font-semibold text-muted hover:text-primary-900 border bg-white px-4 py-2 rounded-lg shadow-sm">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          
+          {/* Quote Status Bubble */}
+          <span className={`text-[11px] font-bold px-3 py-1.5 rounded-md border 
+            ${quote.status === "DRAFT" ? "bg-slate-100 text-slate-600 border-slate-200" : 
+              quote.status === "APPROVED" ? "bg-green-100 text-green-700 border-green-200" : 
+              quote.status === "REJECTED" ? "bg-red-100 text-red-700 border-red-200" : 
+              "bg-blue-100 text-blue-700 border-blue-200"}`}>
+            STATUS: {quote.status}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Send Email Action */}
+          <button 
+            onClick={handleSendEmail} 
+            disabled={sending || quote.status === "APPROVED"}
+            className="flex items-center gap-2 text-sm font-bold text-white bg-slate-800 hover:bg-slate-900 px-6 py-2.5 rounded-lg shadow-md transition-colors disabled:opacity-50"
+          >
+            <Send className="w-4 h-4" /> {sending ? "Sending..." : "Email to Client"}
+          </button>
+
+          <button onClick={handlePrint} className="flex items-center gap-2 text-sm font-bold text-white bg-primary-600 hover:bg-primary-900 px-6 py-2.5 rounded-lg shadow-md transition-colors">
+            <Printer className="w-4 h-4" /> Save as PDF
+          </button>
+        </div>
       </div>
 
       {/* A4 PAGE CONTAINER - Exactly 210x297mm */}
@@ -208,10 +269,7 @@ export default function QuotePDFView() {
            
            {/* RIGHT (CLIENT) SIGNATURE */}
            <div className="flex flex-col justify-end w-[45%] mb-[8px]">
-             <div className="flex items-end gap-2">
-                 <span className="shrink-0 tracking-widest z-10">SIGNATURE :</span>
-                 <div className="border-b-[1.5px] border-black flex-1 z-10"></div>
-             </div>
+             {/* Intentionally removed as per client request to only show SmartFab signature */}
            </div>
 
         </div>

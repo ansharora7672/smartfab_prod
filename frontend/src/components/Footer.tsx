@@ -10,7 +10,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer id="contact" className="bg-primary-900 text-white pt-16 pb-8">
+    <footer id="contact" className="bg-text-primary text-white pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
 
