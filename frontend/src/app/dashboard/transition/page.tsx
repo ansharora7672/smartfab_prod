@@ -61,6 +61,29 @@ export default function TransitionTicketsPage() {
     }
   };
 
+  // Staff manual LPO entry
+  const handleEnterLpo = async (quoteId: string) => {
+    const lpoNum = window.prompt("Enter the client's Local Purchase Order (LPO) number:");
+    if (!lpoNum || !lpoNum.trim()) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/quotes/${quoteId}/enter-lpo`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lpo_number: lpoNum.trim() }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save LPO number");
+
+      setFeedback({ message: `LPO ${lpoNum} saved! Ticket is now an Active Order.`, type: "success" });
+      setTimeout(() => setFeedback(null), 4000);
+      fetchTransitionTickets(); // Refresh the list (it should disappear from this view as it moves to ACTIVE_ORDER)
+    } catch (err: any) {
+      setFeedback({ message: err.message, type: "error" });
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
   // Helper: renders the right badge based on quote status
   const renderQuoteStatusBadge = (quote: any) => {
     if (!quote) {
@@ -82,9 +105,9 @@ export default function TransitionTicketsPage() {
     const statusLabels: Record<string, string> = {
       DRAFT: "Draft",
       SENT: "Sent to Client",
-      APPROVED: "Approved ✅",
-      REJECTED: "Declined ❌",
-      MODIFICATION_REQUESTED: "Changes Requested 🔄",
+      APPROVED: "Approved",
+      REJECTED: "Declined",
+      MODIFICATION_REQUESTED: "Changes Requested",
     };
 
     return (
@@ -145,6 +168,26 @@ export default function TransitionTicketsPage() {
               <RotateCcw className="w-3.5 h-3.5" /> Resend
             </>}
           </button>
+        )}
+
+        {/* Approved and waiting for LPO → show Enter LPO manually */}
+        {quote.status === "APPROVED" && !t.lpo_number && (
+          <button
+            onClick={() => handleEnterLpo(quote.id)}
+            className="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+          >
+            Enter LPO
+          </button>
+        )}
+
+        {/* Rejected or Modification Requested → show Create Revision */}
+        {(quote.status === "REJECTED" || quote.status === "MODIFICATION_REQUESTED") && (
+          <Link
+            href={`/dashboard/quotes/new?ticket_id=${t.id}`}
+            className="bg-primary-900 hover:bg-primary-600 text-white font-semibold text-xs px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+          >
+            <FileText className="w-3.5 h-3.5" /> Create Revision
+          </Link>
         )}
       </div>
     );
@@ -215,9 +258,37 @@ export default function TransitionTicketsPage() {
                     </div>
                   </td>
 
-                  {/* Quote Status Badge */}
+                  {/* Quote Status Badge & Versions */}
                   <td className="px-6 py-5">
-                    {renderQuoteStatusBadge(t.quote)}
+                    <div className="flex flex-col items-start gap-2">
+                      {renderQuoteStatusBadge(t.quote)}
+                      
+                      {/* Show LPO status if completely approved */}
+                      {t.lpo_number && (
+                        <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md border border-green-200 uppercase tracking-widest mt-1">
+                          LPO: {t.lpo_number}
+                        </span>
+                      )}
+
+                      {/* Display multiple quote versions if they exist */}
+                      {t.quotes && t.quotes.length > 1 && (
+                        <div className="flex flex-col gap-1 mt-2 w-full">
+                          <span className="text-[10px] text-muted font-bold uppercase tracking-widest border-b border-border pb-1 mb-1">
+                            Version History
+                          </span>
+                          {t.quotes.map((q: any, index: number) => (
+                            <Link 
+                              key={q.id} 
+                              href={`/dashboard/quotes/${q.id}/pdf`}
+                              className="text-[11px] font-medium text-primary-600 hover:text-primary-900 transition-colors flex items-center justify-between"
+                            >
+                              <span>{q.quote_no}</span>
+                              <span className="text-[9px] text-muted ml-2">{q.status}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Quote Total */}
