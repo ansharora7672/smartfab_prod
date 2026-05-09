@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Copy, Check, X } from "lucide-react";
+import { Plus, Copy, Check, X, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -220,6 +220,37 @@ export default function StaffManagementPage() {
     });
   };
 
+  const handleDeleteUser = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+
+    setConfirmDialog({
+      open: true,
+      title: `Permanently delete ${user.full_name}?`,
+      description: `This will remove ${user.full_name} (${user.email}) from the system entirely. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}`,
+            {
+              method: "DELETE",
+              credentials: "include",
+            }
+          );
+          if (!res.ok) {
+            const err = await res.json();
+            setFeedback({ type: "error", message: err.detail || "Failed to delete user." });
+            return;
+          }
+          setFeedback({ type: "success", message: `${user.full_name} has been permanently deleted.` });
+          fetchUsers();
+        } catch {
+          setFeedback({ type: "error", message: "Something went wrong. Please try again." });
+        }
+      },
+    });
+  };
+
   const copyToClipboard = () => {
     if (successData) {
       navigator.clipboard.writeText(successData.tempPass);
@@ -319,7 +350,7 @@ export default function StaffManagementPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-600/20 bg-white text-primary-900"
-                    placeholder="m.thorne@smartfab.ind"
+                    placeholder="firstname.lastname@company.com"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -394,6 +425,7 @@ export default function StaffManagementPage() {
                 <th className="px-6 py-4 text-[11px] font-semibold text-muted uppercase tracking-widest">Status</th>
                 <th className="px-6 py-4 text-[11px] font-semibold text-muted uppercase tracking-widest">Created</th>
                 <th className="px-6 py-4 text-[11px] font-semibold text-muted uppercase tracking-widest">Updated</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-muted uppercase tracking-widest"></th>
               </tr>
             </thead>
             <tbody>
@@ -435,6 +467,15 @@ export default function StaffManagementPage() {
                   </td>
                   <td className="px-6 py-4 text-xs text-muted">{formatDateTime(u.created_at)}</td>
                   <td className="px-6 py-4 text-xs text-muted">{formatDateTime(u.updated_at)}</td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => handleDeleteUser(u.id)}
+                      className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-bg transition-all duration-300"
+                      title="Delete user"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -477,7 +518,7 @@ export default function StaffManagementPage() {
               </button>
             </div>
 
-            {/* Bottom row: role + date */}
+            {/* Bottom row: role + date + delete */}
             <div className="flex items-center justify-between pt-3 border-t border-border/50">
               <select
                 value={u.role}
@@ -487,7 +528,16 @@ export default function StaffManagementPage() {
                 <option value="ADMIN">Admin</option>
                 <option value="STAFF">Staff</option>
               </select>
-              <span className="text-[11px] text-muted">Joined {formatDate(u.created_at)}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-muted">Joined {formatDate(u.created_at)}</span>
+                <button
+                  onClick={() => handleDeleteUser(u.id)}
+                  className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-bg transition-all duration-300"
+                  title="Delete user"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         ))}

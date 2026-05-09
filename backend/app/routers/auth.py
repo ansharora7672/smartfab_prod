@@ -1,3 +1,6 @@
+import secrets
+import string
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,8 +8,9 @@ from sqlmodel import select
 
 from app.database import get_session
 from app.models import User, UserRole
-from app.schemas.auth import UserLogin, TokenResponse, UserResponse, ChangePasswordRequest
+from app.schemas.auth import UserLogin, TokenResponse, UserResponse, ChangePasswordRequest, ForgotPasswordRequest
 from app.services.auth import hash_password, verify_password, create_access_token
+from app.services.emails import send_password_reset_email
 
 from fastapi.responses import JSONResponse
 
@@ -144,5 +148,42 @@ async def change_password(
     current_user.updated_at = datetime.now(timezone.utc)
     session.add(current_user)
     await session.commit()
-    
+
     return {"message": "Password updated successfully!"}
+
+
+# FORGOT PASSWORD — generates a temp password and emails it to the user
+@router.post("/forgot-password")
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    statement = select(User).where(User.email == data.email)
+    result = await session.execute(statement)
+    user = result.scalar_one_or_none()
+
+    # Always return the same response to prevent email enumeration
+    generic_response = {"message": "If this email is registered, a temporary password has been sent to it."}
+
+    if not user or not user.is_active:
+        return generic_response
+
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+
+    email_sent = await asyncio.to_thread(
+        send_password_reset_email,
+        user.email,
+        user.full_name,
+        temp_password
+    )
+
+    if not email_sent:
+        raise HTTPException(status_code=502, detail="Failed to send reset email. Please contact your administrator.")
+
+    user.hashed_password = hash_password(temp_password)
+    user.updated_at = datetime.now(timezone.utc)
+    session.add(user)
+    await session.commit()
+
+    return generic_response

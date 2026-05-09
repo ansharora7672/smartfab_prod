@@ -20,8 +20,8 @@ export default function Footer() {
               <Image
                 src="/SmartFab_FinalLogo.png"
                 alt="SmartFab Lathe"
-                width={36}
-                height={36}
+                width={56}
+                height={56}
                 className="object-contain"
 
               />

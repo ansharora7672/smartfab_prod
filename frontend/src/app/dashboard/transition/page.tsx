@@ -2,13 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { User, Building, Phone, Mail, Check, AlertCircle, Calendar, FileText, Send, Eye, Edit, RotateCcw } from "lucide-react";
+import { User, Building, Phone, Mail, Check, AlertCircle, Calendar, FileText, Send, Eye, Edit, RotateCcw, UserCheck } from "lucide-react";
 import Link from "next/link";
+
+const TABS = [
+  { key: "ALL",  label: "All" },
+  { key: "MINE", label: "Assigned to Me" },
+] as const;
+
+type FilterKey = typeof TABS[number]["key"];
 
 export default function TransitionTicketsPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterKey>("ALL");
   const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -193,6 +201,13 @@ export default function TransitionTicketsPage() {
     );
   };
 
+  const getFilteredTickets = (key: FilterKey) => {
+    if (key === "MINE") return tickets.filter(t => t.assigned_to_id === user?.id);
+    return tickets;
+  };
+
+  const filteredTickets = getFilteredTickets(filter);
+
   if (loading) return <div className="p-8 text-muted animate-pulse">Loading transition tickets...</div>;
 
   return (
@@ -220,19 +235,46 @@ export default function TransitionTicketsPage() {
 
       {/* Table Module */}
       <div className="bg-white rounded-2xl border border-border shadow-[0_4px_30px_rgba(0,0,0,0.03)] overflow-hidden">
+
+        {/* Tab Bar */}
+        <div className="flex items-end gap-0 border-b border-border px-6 pt-4">
+          {TABS.map(tab => {
+            const count = getFilteredTickets(tab.key).length;
+            const isActive = filter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`relative px-4 py-2.5 mr-1 text-sm font-semibold rounded-t-lg transition-colors focus:outline-none
+                  ${isActive
+                    ? "text-primary-700 bg-primary-50 border-b-2 border-primary-600"
+                    : "text-muted hover:text-primary-800 hover:bg-section-bg/60 border-b-2 border-transparent"
+                  }`}
+              >
+                {tab.label}
+                <span className={`ml-2 text-[11px] font-bold px-1.5 py-0.5 rounded-full
+                  ${isActive ? "bg-primary-100 text-primary-700" : "bg-border text-muted"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[1000px]">
             <thead>
               <tr className="border-b border-border bg-section-bg/30">
                 <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Inquiry ID</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Client & Company</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Assigned To</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Quote Status</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Total</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {tickets.map((t) => (
+              {filteredTickets.map((t) => (
                 <tr key={t.id} className="border-b border-border/40 hover:bg-section-bg/30 transition-colors">
                   
                   {/* ID */}
@@ -256,6 +298,18 @@ export default function TransitionTicketsPage() {
                         <Mail className="w-3 h-3" /> {t.email}
                       </span>
                     </div>
+                  </td>
+
+                  {/* Assigned To */}
+                  <td className="px-6 py-5">
+                    {t.assignee_name ? (
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+                        <UserCheck className="w-3.5 h-3.5 text-primary-600 shrink-0" />
+                        {t.assignee_name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted">Unassigned</span>
+                    )}
                   </td>
 
                   {/* Quote Status Badge & Versions */}
@@ -312,10 +366,10 @@ export default function TransitionTicketsPage() {
                 </tr>
               ))}
               
-              {tickets.length === 0 && (
+              {filteredTickets.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-sm text-muted font-medium bg-section-bg/10">
-                    No tickets are currently waiting for a quote.
+                  <td colSpan={6} className="py-12 text-center text-sm text-muted font-medium bg-section-bg/10">
+                    {filter === "MINE" ? "No quotes are currently assigned to you." : "No tickets are currently waiting for a quote."}
                   </td>
                 </tr>
               )}

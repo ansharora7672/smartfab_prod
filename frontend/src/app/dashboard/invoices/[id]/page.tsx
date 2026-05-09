@@ -112,7 +112,7 @@ export default function InvoicePDFPage() {
           {/* Left — company info */}
           <div className="w-[50%] border-r border-black p-2 flex items-center gap-3">
             <div className="relative w-[120px] h-[120px] shrink-0">
-              <Image src="/SmartFab_FinalLogo_version.png" alt="Logo" layout="fill" objectFit="contain" priority />
+              <Image src="/SmartFab_FinalLogo.png" alt="Logo" layout="fill" objectFit="contain" priority />
             </div>
             <div>
               <div className="text-[16px] font-black text-[#1E3A8A] mb-1">SmartFab Lathe</div>
@@ -175,7 +175,7 @@ export default function InvoicePDFPage() {
             {/* Watermark centered in body */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.07]">
               <div className="relative w-[520px] h-[520px]">
-                <Image src="/SmartFab_FinalLogo_version.png" alt="" layout="fill" objectFit="contain" />
+                <Image src="/SmartFab_FinalLogo.png" alt="" layout="fill" objectFit="contain" />
               </div>
             </div>
             {/* Full-height column grid lines */}

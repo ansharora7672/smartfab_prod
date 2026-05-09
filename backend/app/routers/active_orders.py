@@ -25,6 +25,26 @@ from app.models.invoice import Invoice, InvoiceItem
 
 router = APIRouter(prefix="/admin/orders", tags=["Active Orders"])
 
+# Ordered from earliest → latest stage. Overall status = stage of the most-behind item.
+_STATUS_ORDER = [
+    "ORDER_RECEIVED",
+    "VENDOR_ASSIGNED",
+    "IN_PRODUCTION",
+    "QUALITY_CHECK",
+    "READY_FOR_DELIVERY",
+    "DELIVERED",
+    "COMPLETED",
+]
+
+def _overall_status(items: list) -> str:
+    if not items:
+        return "ORDER_RECEIVED"
+    present = {item.production_status.value if hasattr(item.production_status, "value") else item["production_status"] for item in items}
+    for s in _STATUS_ORDER:
+        if s in present:
+            return s
+    return "ORDER_RECEIVED"
+
 
 @router.get("/active")
 async def list_active_orders(
@@ -113,6 +133,20 @@ async def list_active_orders(
                 ],
             }
 
+        item_dicts = [
+            {
+                "id": str(item.id),
+                "sr_no": item.sr_no,
+                "item_description": item.item_description,
+                "qty": item.qty,
+                "u_price": item.u_price,
+                "total_amount": item.total_amount,
+                "vendor_id": str(item.vendor_id) if item.vendor_id else None,
+                "production_status": item.production_status.value if item.production_status else "ORDER_RECEIVED",
+            }
+            for item in items
+        ]
+
         response.append(
             {
                 "ticket": {
@@ -128,19 +162,8 @@ async def list_active_orders(
                     "quote_no": quote.quote_no,
                     "lpo_no": quote.lpo_no,
                     "status": quote.status.value,
-                    "items": [
-                        {
-                            "id": str(item.id),
-                            "sr_no": item.sr_no,
-                            "item_description": item.item_description,
-                            "qty": item.qty,
-                            "u_price": item.u_price,
-                            "total_amount": item.total_amount,
-                            "vendor_id": str(item.vendor_id) if item.vendor_id else None,
-                            "production_status": item.production_status.value if item.production_status else "ORDER_RECEIVED",
-                        }
-                        for item in items
-                    ],
+                    "overall_production_status": _overall_status(items),
+                    "items": item_dicts,
                 },
                 "delivery_assignments": assignments,
                 "delivery_notes": delivery_notes,
@@ -151,18 +174,214 @@ async def list_active_orders(
     return response
 
 
+@router.get("/active/{ticket_id}")
+async def get_active_order(
+    ticket_id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Quote, Ticket)
+        .join(Ticket, Ticket.id == Quote.ticket_id)
+        .where(Quote.status == QuoteStatusEnum.APPROVED)
+        .where(Ticket.id == ticket_id)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    quote, ticket = row
+    items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
+    items = items_result.scalars().all()
+
+    assignments_result = await db.execute(
+        select(DeliveryAssignment, Driver.full_name)
+        .join(Driver, Driver.id == DeliveryAssignment.driver_id)
+        .where(DeliveryAssignment.quote_id == quote.id)
+    )
+    assignments = [
+        {
+            "id": str(a.id),
+            "quote_item_id": str(a.quote_item_id),
+            "driver_id": str(a.driver_id),
+            "driver_name": driver_name,
+            "quantity_to_deliver": a.quantity_to_deliver,
+            "status": a.status.value,
+            "remark": a.remark,
+        }
+        for a, driver_name in assignments_result.all()
+    ]
+
+    notes_result = await db.execute(
+        select(DeliveryNote).where(DeliveryNote.quote_id == quote.id).order_by(DeliveryNote.version)
+    )
+    notes = notes_result.scalars().all()
+    delivery_notes = [
+        {
+            "id": str(n.id),
+            "note_no": n.note_no,
+            "version": n.version,
+            "status": n.status.value,
+            "note_date": n.note_date.isoformat(),
+            "address": n.address,
+            "lpo_no": n.lpo_no,
+        }
+        for n in notes
+    ]
+
+    invoice_result = await db.execute(
+        select(Invoice).where(Invoice.ticket_id == ticket.id).order_by(Invoice.created_at.desc())
+    )
+    invoice = invoice_result.scalars().first()
+    invoice_data = None
+    if invoice:
+        inv_items_result = await db.execute(
+            select(InvoiceItem).where(InvoiceItem.invoice_id == invoice.id).order_by(InvoiceItem.sr_no)
+        )
+        inv_items = inv_items_result.scalars().all()
+        invoice_data = {
+            "id": str(invoice.id),
+            "invoice_no": invoice.invoice_no,
+            "status": invoice.status.value,
+            "taxable_value": invoice.taxable_value,
+            "vat_total": invoice.vat_total,
+            "invoice_total": invoice.invoice_total,
+            "payment_terms": invoice.payment_terms,
+            "created_at": invoice.created_at.isoformat(),
+            "items": [
+                {
+                    "sr_no": i.sr_no,
+                    "description_of_service": i.description_of_service,
+                    "quantity": i.quantity,
+                    "per": i.per,
+                    "amount": i.amount,
+                    "total_incl_vat": i.total_incl_vat,
+                }
+                for i in inv_items
+            ],
+        }
+
+    item_dicts = [
+        {
+            "id": str(item.id),
+            "sr_no": item.sr_no,
+            "item_description": item.item_description,
+            "qty": item.qty,
+            "u_price": item.u_price,
+            "total_amount": item.total_amount,
+            "vendor_id": str(item.vendor_id) if item.vendor_id else None,
+            "production_status": item.production_status.value if item.production_status else "ORDER_RECEIVED",
+        }
+        for item in items
+    ]
+
+    return {
+        "ticket": {
+            "id": str(ticket.id),
+            "ticket_id": ticket.ticket_id,
+            "customer_name": ticket.customer_name,
+            "company_name": ticket.company_name,
+            "email": ticket.email,
+            "status": ticket.status.value,
+        },
+        "quote": {
+            "id": str(quote.id),
+            "quote_no": quote.quote_no,
+            "lpo_no": quote.lpo_no,
+            "status": quote.status.value,
+            "overall_production_status": _overall_status(items),
+            "items": item_dicts,
+        },
+        "delivery_assignments": assignments,
+        "delivery_notes": delivery_notes,
+        "invoice": invoice_data,
+    }
+
+
+@router.patch("/tickets/{ticket_id}/production-status")
+async def update_order_production_status(
+    ticket_id: uuid.UUID,
+    data: dict,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Set ALL items on this order to the same production status at once."""
+    from app.models.quote import ProductionStatusEnum
+    result = await db.execute(
+        select(Quote, Ticket)
+        .join(Ticket, Ticket.id == Quote.ticket_id)
+        .where(Ticket.id == ticket_id)
+        .where(Quote.status == QuoteStatusEnum.APPROVED)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    quote, _ = row
+    items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
+    items = items_result.scalars().all()
+
+    try:
+        new_status = ProductionStatusEnum(data.get("production_status"))
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=400, detail="Invalid production_status value")
+
+    for item in items:
+        item.production_status = new_status
+        db.add(item)
+
+    await db.commit()
+    return {"overall_production_status": new_status.value, "updated_items": len(items)}
+
+
 @router.post("/tickets/{ticket_id}/mark-complete")
 async def mark_order_complete(
     ticket_id: uuid.UUID,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    from app.models.quote import ProductionStatusEnum
+    from app.models.invoice import Invoice, InvoiceStatusEnum
+
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     if ticket.status != TicketStatusEnum.ACTIVE_ORDER:
         raise HTTPException(status_code=400, detail="Only active orders can be marked as complete")
 
+    # Guard 1: all items must be at COMPLETED production status
+    if ticket.approved_quote_id:
+        items_result = await db.execute(
+            select(QuoteItem).join(Quote, Quote.id == QuoteItem.quote_id)
+            .where(Quote.ticket_id == ticket.id)
+        )
+        items = items_result.scalars().all()
+        incomplete = [i for i in items if i.production_status != ProductionStatusEnum.COMPLETED]
+        if incomplete:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{len(incomplete)} item(s) are not yet at COMPLETED production status. Update all items before closing the order.",
+            )
+
+    # Guard 2: invoice must exist and be SENT or PAID
+    inv_result = await db.execute(
+        select(Invoice)
+        .where(Invoice.ticket_id == ticket.id)
+        .order_by(Invoice.created_at.desc())
+    )
+    invoice = inv_result.scalars().first()
+    if not invoice:
+        raise HTTPException(
+            status_code=400,
+            detail="No invoice found for this order. Generate and send the invoice before completing.",
+        )
+    if invoice.status not in (InvoiceStatusEnum.SENT, InvoiceStatusEnum.PAID):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invoice is currently '{invoice.status.value}'. It must be SENT or PAID before the order can be completed.",
+        )
+
+    # All guards passed — close the ticket
     ticket.status = TicketStatusEnum.CLOSED
     ticket.updated_at = datetime.now(timezone.utc)
     db.add(ticket)

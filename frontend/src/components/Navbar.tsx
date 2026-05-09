@@ -35,10 +35,10 @@ export default function Navbar() {
         {/* Logo — always white since site is dark-themed */}
         <Link href="/" className="flex items-center gap-0">
           <Image
-            src="/SmartFab_FinalLogo_version.png"
+            src="/SmartFab_FinalLogo.png"
             alt="SmartFab Lathe"
-            width={80}
-            height={80}
+            width={100}
+            height={100}
             className="object-contain"
           />
           <div className="flex flex-col items-start leading-none">

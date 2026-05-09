@@ -255,6 +255,104 @@ async def get_completed_tickets(
 
 
 # ---------------------------------------------------------
+# INTERNAL ENDPOINT - Fetch a Single Completed Ticket with full details
+# Must be declared BEFORE /admin/tickets/{id} to avoid route clash
+# ---------------------------------------------------------
+@ticket_router.get("/admin/tickets/completed/{ticket_id}")
+async def get_completed_ticket_detail(
+    ticket_id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.invoice import Invoice
+    from app.models.quote import Quote, QuoteItem
+    from app.models.delivery import DeliveryNote
+
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket or ticket.status != TicketStatusEnum.CLOSED:
+        raise HTTPException(status_code=404, detail="Completed ticket not found")
+
+    assignee_name = None
+    if ticket.assigned_to_id:
+        assignee = await db.get(User, ticket.assigned_to_id)
+        assignee_name = assignee.full_name if assignee else None
+
+    quote = None
+    items = []
+    delivery_notes = []
+    if ticket.approved_quote_id:
+        quote = await db.get(Quote, ticket.approved_quote_id)
+        if quote:
+            items_result = await db.execute(
+                select(QuoteItem).where(QuoteItem.quote_id == quote.id).order_by(QuoteItem.sr_no)
+            )
+            items = items_result.scalars().all()
+
+            notes_result = await db.execute(
+                select(DeliveryNote).where(DeliveryNote.quote_id == quote.id).order_by(DeliveryNote.version)
+            )
+            delivery_notes = [
+                {
+                    "id": str(n.id),
+                    "note_no": n.note_no,
+                    "version": n.version,
+                    "status": n.status.value,
+                    "note_date": n.note_date.isoformat(),
+                }
+                for n in notes_result.scalars().all()
+            ]
+
+    inv_res = await db.execute(
+        select(Invoice).where(Invoice.ticket_id == ticket.id).order_by(Invoice.created_at.desc())
+    )
+    invoice = inv_res.scalars().first()
+    invoice_data = None
+    if invoice:
+        invoice_data = {
+            "id": str(invoice.id),
+            "invoice_no": invoice.invoice_no,
+            "status": invoice.status.value,
+            "invoice_total": invoice.invoice_total,
+            "vat_total": invoice.vat_total,
+            "taxable_value": invoice.taxable_value,
+            "payment_terms": invoice.payment_terms,
+            "created_at": invoice.created_at.isoformat(),
+        }
+
+    return {
+        "ticket": {
+            "id": str(ticket.id),
+            "ticket_id": ticket.ticket_id,
+            "customer_name": ticket.customer_name,
+            "company_name": ticket.company_name,
+            "email": ticket.email,
+            "phone_number": ticket.phone_number,
+            "lpo_number": ticket.lpo_number,
+            "updated_at": ticket.updated_at.isoformat(),
+            "assignee_name": assignee_name,
+        },
+        "quote": {
+            "id": str(quote.id),
+            "quote_no": quote.quote_no,
+            "lpo_no": quote.lpo_no,
+            "items": [
+                {
+                    "id": str(item.id),
+                    "sr_no": item.sr_no,
+                    "item_description": item.item_description,
+                    "qty": item.qty,
+                    "u_price": item.u_price,
+                    "total_amount": item.total_amount,
+                }
+                for item in items
+            ],
+        } if quote else None,
+        "invoice": invoice_data,
+        "delivery_notes": delivery_notes,
+    }
+
+
+# ---------------------------------------------------------
 # INTERNAL ENDPOINT - Fetch a Single Ticket by DB ID
 # ---------------------------------------------------------
 @ticket_router.get("/admin/tickets/{id}", response_model=TicketPublic)

@@ -9,6 +9,13 @@ function formatDate(date: Date) {
   return d.toISOString().split("T")[0];
 }
 
+function formatTime12h(time: string) {
+  const [h, m] = time.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${m.toString().padStart(2, "0")} ${period}`;
+}
+
 export default function AvailabilityPage() {
   const [selectedWeek, setSelectedWeek] = useState<"this_week" | "next_week">("this_week");
   const [selectedSlots, setSelectedSlots] = useState<{ date: string; start_time: string }[]>([]);
@@ -224,7 +231,7 @@ export default function AvailabilityPage() {
               {timeSlots.map((time, timeIdx) => (
                 <div key={timeIdx} className="flex border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
                   <div className="w-24 p-4 text-sm font-medium text-slate-500 flex items-center">
-                    {time.substring(0, 5)}
+                    {formatTime12h(time)}
                   </div>
                   
                   {displayedDays.map((day, dayIdx) => {

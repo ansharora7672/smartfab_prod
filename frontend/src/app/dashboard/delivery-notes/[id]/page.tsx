@@ -100,7 +100,7 @@ export default function DeliveryNotePDFPage() {
         {/* HEADER */}
         <div className="flex w-full mb-2 relative z-20 items-center justify-between">
           <div className="w-[180px] h-[180px] shrink-0 relative ml-1 scale-[1.25]">
-            <Image src="/SmartFab_FinalLogo_version.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
+            <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
           </div>
           <div className="flex-1 flex flex-col items-center justify-center -ml-2">
             <h1 className="text-[#1E3A8A] font-black text-[38px] tracking-wide mb-1 leading-none">SMARTFAB</h1>
@@ -166,51 +166,40 @@ export default function DeliveryNotePDFPage() {
         </div>
 
         {/* ITEMS TABLE */}
-        <div className="w-full border-2 border-black flex-1 flex flex-col mb-4 bg-white text-[13px] font-black text-center text-black font-sans">
-          {/* Header */}
-          <div className="flex border-b-2 border-black w-full bg-white relative z-10 uppercase h-12">
-            <div className="w-[10%] border-r-2 border-black flex items-center justify-center text-[11px]">SR.NO</div>
-            <div className="w-[57%] border-r-2 border-black flex items-center justify-center text-[11px]">ITEM DESCRIPTION</div>
-            <div className="w-[11%] border-r-2 border-black flex items-center justify-center text-[11px]">QTY</div>
-            <div className="w-[22%] flex items-center justify-center text-[11px]">REMARK</div>
-          </div>
-
-          {/* Item rows */}
-          <div className="flex flex-1 w-full bg-white relative z-0">
-            <div className="w-[10%] border-r-2 border-black h-full flex flex-col font-bold">
-              {note.items.map((item: any, i: number) => (
-                <div key={i} className="border-b border-black/30 py-2.5 flex items-center justify-center">{item.sr_no}</div>
-              ))}
-              {Array.from({ length: blankRows }).map((_, i) => (
-                <div key={`b-${i}`} className="border-b border-black/30 py-2.5 flex-1 min-h-[36px]" />
-              ))}
-            </div>
-            <div className="w-[57%] border-r-2 border-black h-full flex flex-col font-bold tracking-tight">
-              {note.items.map((item: any, i: number) => (
-                <div key={i} className="border-b border-black/30 py-2.5 text-left pl-4 flex items-center">{item.item_description}</div>
-              ))}
-              {Array.from({ length: blankRows }).map((_, i) => (
-                <div key={`b-${i}`} className="border-b border-black/30 py-2.5 flex-1 min-h-[36px]" />
-              ))}
-            </div>
-            <div className="w-[11%] border-r-2 border-black h-full flex flex-col font-bold">
-              {note.items.map((item: any, i: number) => (
-                <div key={i} className="border-b border-black/30 py-2.5 flex items-center justify-center">{item.qty}</div>
-              ))}
-              {Array.from({ length: blankRows }).map((_, i) => (
-                <div key={`b-${i}`} className="border-b border-black/30 py-2.5 flex-1 min-h-[36px]" />
-              ))}
-            </div>
-            <div className="w-[22%] h-full flex flex-col font-bold">
-              {note.items.map((item: any, i: number) => (
-                <div key={i} className="border-b border-black/30 py-2.5 text-left pl-3 flex items-center">{item.remark}</div>
-              ))}
-              {Array.from({ length: blankRows }).map((_, i) => (
-                <div key={`b-${i}`} className="border-b border-black/30 py-2.5 flex-1 min-h-[36px]" />
-              ))}
-            </div>
-          </div>
-        </div>
+        <table className="w-full border-2 border-black flex-1 mb-4 bg-white text-[13px] font-black text-center text-black font-sans border-collapse">
+          <colgroup>
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "57%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "22%" }} />
+          </colgroup>
+          <thead>
+            <tr className="border-b-2 border-black uppercase h-12">
+              <th className="border-r-2 border-black text-[11px] font-black">SR.NO</th>
+              <th className="border-r-2 border-black text-[11px] font-black">ITEM DESCRIPTION</th>
+              <th className="border-r-2 border-black text-[11px] font-black">QTY</th>
+              <th className="text-[11px] font-black">REMARK</th>
+            </tr>
+          </thead>
+          <tbody>
+            {note.items.map((item: any, i: number) => (
+              <tr key={i} className="border-b border-black/30">
+                <td className="border-r-2 border-black py-2.5 text-center">{item.sr_no}</td>
+                <td className="border-r-2 border-black py-2.5 text-left pl-4 font-bold tracking-tight">{item.item_description}</td>
+                <td className="border-r-2 border-black py-2.5 text-center">{item.qty}</td>
+                <td className="py-2.5 text-left pl-3">{item.remark}</td>
+              </tr>
+            ))}
+            {Array.from({ length: blankRows }).map((_, i) => (
+              <tr key={`b-${i}`} className="border-b border-black/30" style={{ height: "36px" }}>
+                <td className="border-r-2 border-black">&nbsp;</td>
+                <td className="border-r-2 border-black"></td>
+                <td className="border-r-2 border-black"></td>
+                <td></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* SIGNATURE BLOCK */}
         <div className="w-full border border-black p-4 mt-auto">

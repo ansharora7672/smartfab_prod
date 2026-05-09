@@ -133,6 +133,80 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
         print(f"  [EMAIL ERROR] Failed to send welcome email to {to_email}: {e}")
         return False
 
+
+def send_password_reset_email(to_email: str, full_name: str, temp_password: str) -> bool:
+    """
+    Sends a password reset email containing a new temporary password.
+    Called when a user requests 'Forgot Password' on the login page.
+
+    Returns:
+        True  — email sent successfully
+        False — email failed
+    """
+    login_url = f"{settings.FRONTEND_URL}/dashboard/login"
+
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
+            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Operations Platform</p>
+        </div>
+
+        <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 12px; padding: 32px; margin-bottom: 24px;">
+            <p style="font-size: 15px; color: #334155; margin: 0 0 12px 0;">
+                Hi <strong>{full_name}</strong>,
+            </p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 24px 0;">
+                A password reset was requested for your SmartFab Lathe account. A new temporary password has been generated for you below.
+            </p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 24px 0;">
+                Use this temporary password to sign in, then change your password immediately from the account settings in the dashboard.
+            </p>
+
+            <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 24px;">
+                <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748B; margin: 0 0 8px 0; font-weight: 600;">Temporary Password</p>
+                <p style="font-size: 22px; font-family: monospace; font-weight: 700; color: #1E3A8A; margin: 0; letter-spacing: 2px;">
+                    {temp_password}
+                </p>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{login_url}"
+                   style="display: inline-block; background: #2563EB; color: #FFFFFF; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500;">
+                    Go to Login
+                </a>
+            </div>
+        </div>
+
+        <p style="font-size: 12px; color: #64748B; text-align: center; margin: 0 0 8px 0;">
+            If you did not request a password reset, please contact your administrator immediately.
+        </p>
+        <p style="font-size: 12px; color: #64748B; text-align: center; margin: 0;">
+            This is an automated message from SmartFab Lathe. Do not reply to this email.
+        </p>
+    </div>
+    """
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
+        msg["To"] = to_email
+        msg["Subject"] = "SmartFab Lathe — Password Reset Request"
+
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"  [EMAIL] Password reset email sent to {to_email}")
+        return True
+
+    except Exception as e:
+        print(f"  [EMAIL ERROR] Failed to send password reset email to {to_email}: {e}")
+        return False
+
+
 def send_ticket_lifecycle_notification(to_email: str, notification_type: str, context: dict) -> bool:
     """
     Sends automated lifecycle emails for a Ticket to the assigned Staff Member.
