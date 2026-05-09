@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -36,6 +37,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <div className="flex flex-col items-center leading-none mb-3">
+            <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" width={72} height={72} className="object-contain mb-3" />
             <span className="font-heading font-bold text-2xl tracking-[0.2em] text-primary-900">
               SMARTFAB
             </span>

@@ -1,15 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Package, CheckCircle, Clock, AlertCircle, FileText, Receipt } from "lucide-react";
+import { Search, Package, CheckCircle, Clock, AlertCircle, ChevronRight } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const STATUS_ORDER = [
+const TICKET_STAGES = [
   "Consultation Scheduled",
   "Quote Being Prepared",
   "In Production",
   "Order Completed",
+];
+
+const PRODUCTION_STAGES = [
+  { key: "ORDER_RECEIVED",     label: "Order Received" },
+  { key: "VENDOR_ASSIGNED",    label: "Vendor Assigned" },
+  { key: "IN_PRODUCTION",      label: "In Production" },
+  { key: "QUALITY_CHECK",      label: "Quality Check" },
+  { key: "READY_FOR_DELIVERY", label: "Ready for Delivery" },
+  { key: "DELIVERED",          label: "Delivered" },
+  { key: "COMPLETED",          label: "Completed" },
 ];
 
 type OrderItem = {
@@ -21,27 +31,6 @@ type OrderItem = {
   total_steps: number;
 };
 
-type InvoiceItem = {
-  sr_no: number;
-  description_of_service: string;
-  quantity: number;
-  per: string;
-  amount: number;
-  total_incl_vat: number;
-};
-
-type Invoice = {
-  invoice_no: string;
-  status: string;
-  taxable_value: number;
-  vat_total: number;
-  invoice_total: number;
-  payment_terms: string;
-  amount_chargeable_words: string;
-  created_at: string;
-  items: InvoiceItem[];
-};
-
 type OrderResult = {
   ticket_id: string;
   company_name: string;
@@ -49,58 +38,45 @@ type OrderResult = {
   lpo_number: string | null;
   status: string;
   status_label: string;
+  overall_production_status: string | null;
+  overall_production_status_label: string | null;
+  overall_production_step: number | null;
+  total_production_steps: number;
   items: OrderItem[];
-  invoice: Invoice | null;
 };
 
-function OverallTimeline({ statusLabel }: { statusLabel: string }) {
-  const currentIdx = STATUS_ORDER.indexOf(statusLabel);
+// ── 4-step ticket-level timeline ──────────────────────────────────────────────
+function TicketTimeline({ statusLabel }: { statusLabel: string }) {
+  const currentIdx = TICKET_STAGES.indexOf(statusLabel);
+  // When "Order Completed" is the current step it IS done — treat it as filled.
+  const isFullyComplete = statusLabel === "Order Completed";
 
   return (
-    <div className="flex items-start gap-0 w-full mb-8">
-      {STATUS_ORDER.map((step, idx) => {
-        const done = idx < currentIdx;
-        const active = idx === currentIdx;
-        const last = idx === STATUS_ORDER.length - 1;
-
+    <div className="flex items-start w-full mb-8">
+      {TICKET_STAGES.map((step, idx) => {
+        const done   = idx < currentIdx || (isFullyComplete && idx === currentIdx);
+        const active = !done && idx === currentIdx;
+        const last   = idx === TICKET_STAGES.length - 1;
         return (
           <div key={step} className="flex items-center flex-1 min-w-0">
             <div className="flex flex-col items-center shrink-0">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                  done
-                    ? "bg-primary-500 border-primary-500"
-                    : active
-                    ? "bg-transparent border-primary-400"
-                    : "bg-transparent border-white/20"
-                }`}
-              >
-                {done ? (
-                  <CheckCircle className="w-4 h-4 text-white" />
-                ) : active ? (
-                  <div className="w-3 h-3 rounded-full bg-primary-400" />
-                ) : (
-                  <div className="w-3 h-3 rounded-full bg-white/20" />
-                )}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                done   ? "bg-primary-500 border-primary-500" :
+                active ? "bg-transparent border-primary-400 ring-2 ring-primary-400/20" :
+                         "bg-transparent border-white/20"
+              }`}>
+                {done   ? <CheckCircle className="w-4 h-4 text-white" /> :
+                 active ? <div className="w-2.5 h-2.5 rounded-full bg-primary-400" /> :
+                          <div className="w-2.5 h-2.5 rounded-full bg-white/20" />}
               </div>
-              <span
-                className={`text-[10px] mt-1.5 text-center leading-tight max-w-18 ${
-                  active
-                    ? "text-primary-300 font-semibold"
-                    : done
-                    ? "text-primary-400"
-                    : "text-white/25"
-                }`}
-              >
-                {step}
-              </span>
+              <span className={`text-[10px] mt-1.5 text-center leading-tight max-w-20 font-semibold ${
+                done || active ? "text-white" : "text-white/30"
+              }`}>{step}</span>
             </div>
             {!last && (
-              <div
-                className={`flex-1 h-0.5 mx-1 -mt-4 transition-all ${
-                  done ? "bg-primary-500" : "bg-white/15"
-                }`}
-              />
+              <div className={`flex-1 h-0.5 mx-1 -mt-5 transition-all ${
+                done ? "bg-primary-500" : "bg-white/15"
+              }`} />
             )}
           </div>
         );
@@ -109,131 +85,103 @@ function OverallTimeline({ statusLabel }: { statusLabel: string }) {
   );
 }
 
-function ItemRow({ item }: { item: OrderItem }) {
-  const pct = Math.round((item.progress_step / item.total_steps) * 100);
-
+// ── 7-step production pipeline ────────────────────────────────────────────────
+function ProductionPipeline({ currentStatus }: { currentStatus: string }) {
+  const currentIdx = PRODUCTION_STAGES.findIndex(s => s.key === currentStatus);
   return (
-    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+    <div className="mb-7 bg-white/4 border border-white/8 rounded-2xl p-5">
+      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">
+        Production Stage
+      </p>
+      <div className="flex items-start w-full overflow-x-auto pb-1">
+        {PRODUCTION_STAGES.map((stage, idx) => {
+          const done   = idx < currentIdx;
+          const active = idx === currentIdx;
+          const last   = idx === PRODUCTION_STAGES.length - 1;
+          return (
+            <div key={stage.key} className="flex items-center flex-1 min-w-0">
+              <div className="flex flex-col items-center shrink-0">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all ${
+                  done   ? "bg-primary-500 border-primary-500" :
+                  active ? "bg-transparent border-primary-400 ring-2 ring-primary-400/20" :
+                           "bg-transparent border-white/15"
+                }`}>
+                  {done   ? <CheckCircle className="w-3 h-3 text-white" /> :
+                   active ? <div className="w-2 h-2 rounded-full bg-primary-400" /> :
+                            <div className="w-2 h-2 rounded-full bg-white/15" />}
+                </div>
+                <span className={`text-[9px] mt-1.5 text-center leading-tight max-w-14 font-medium ${
+                  done || active ? "text-white" : "text-white/30"
+                }`}>{stage.label}</span>
+              </div>
+              {!last && (
+                <div className={`flex-1 h-0.5 mx-0.5 -mt-5 transition-all ${
+                  done ? "bg-primary-500" : "bg-white/10"
+                }`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Single item row ───────────────────────────────────────────────────────────
+function ItemCard({ item }: { item: OrderItem }) {
+  const pct = Math.round((item.progress_step / item.total_steps) * 100);
+  return (
+    <div className="bg-white/6 border border-white/12 rounded-xl px-4 py-4">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white truncate">
+          <p className="text-sm font-bold text-white truncate">
             {item.sr_no}. {item.description}
           </p>
-          <p className="text-xs text-white/35 mt-0.5">Qty: {item.qty}</p>
+          <p className="text-xs text-white/55 mt-0.5 font-medium">Qty: {item.qty}</p>
         </div>
-        <span className="text-xs font-semibold text-primary-300 bg-primary-500/20 border border-primary-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+        <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-primary-500/25 text-white border-primary-400/40 whitespace-nowrap shrink-0">
           {item.production_status_label}
         </span>
       </div>
-      <div className="w-full bg-white/10 rounded-full h-1.5">
-        <div
-          className="bg-primary-500 h-1.5 rounded-full transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 bg-white/15 rounded-full h-1.5">
+          <div
+            className="bg-primary-400 h-1.5 rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-white/60 font-semibold shrink-0 w-7 text-right">{pct}%</span>
       </div>
     </div>
   );
 }
 
-function InvoiceCard({ invoice }: { invoice: Invoice }) {
-  const date = new Date(invoice.created_at).toLocaleDateString("en-AE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
-  const isPaid = invoice.status === "PAID";
-
-  return (
-    <div className="mt-6 border border-green-500/20 bg-green-500/10 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Receipt className="w-4 h-4 text-green-400" />
-          <h4 className="text-sm font-semibold text-green-300">Invoice Summary</h4>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-white/30">{date}</span>
-          <span
-            className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
-              isPaid
-                ? "bg-green-500/20 border-green-500/30 text-green-300"
-                : "bg-amber-500/20 border-amber-500/30 text-amber-300"
-            }`}
-          >
-            {isPaid ? "Paid" : invoice.status}
-          </span>
-        </div>
-      </div>
-
-      <p className="text-xs text-white/35 mb-3">
-        Invoice No: <span className="font-medium text-primary-300">{invoice.invoice_no}</span>
-      </p>
-
-      <div className="space-y-2 mb-4">
-        {invoice.items.map((item) => (
-          <div key={item.sr_no} className="flex justify-between text-xs text-white/60">
-            <span className="flex-1 truncate pr-2">
-              {item.sr_no}. {item.description_of_service} ({item.quantity} {item.per})
-            </span>
-            <span className="font-medium whitespace-nowrap text-white/80">
-              AED {item.total_incl_vat.toFixed(2)}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="border-t border-green-500/20 pt-3 space-y-1">
-        <div className="flex justify-between text-xs text-white/45">
-          <span>Subtotal (excl. VAT)</span>
-          <span>AED {invoice.taxable_value.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between text-xs text-white/45">
-          <span>VAT (5%)</span>
-          <span>AED {invoice.vat_total.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between text-sm font-bold text-white pt-1">
-          <span>Total</span>
-          <span>AED {invoice.invoice_total.toFixed(2)}</span>
-        </div>
-      </div>
-
-      {invoice.payment_terms && (
-        <p className="text-xs text-white/30 mt-3">
-          Payment Terms: <span className="text-white/50">{invoice.payment_terms}</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
+// ── Main component ────────────────────────────────────────────────────────────
 export default function TrackOrder() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery]     = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<OrderResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult]   = useState<OrderResult | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-
     setLoading(true);
     setResult(null);
     setError(null);
-
     try {
       const res = await fetch(
         `${API_BASE}/public/track-order?query=${encodeURIComponent(query.trim())}`
       );
       if (res.status === 404) {
-        setError("No order found with that reference number. Please check and try again.");
+        setError("No order found with that reference. Please check and try again.");
         return;
       }
       if (!res.ok) {
         setError("Something went wrong. Please try again later.");
         return;
       }
-      const data: OrderResult = await res.json();
-      setResult(data);
+      setResult(await res.json());
     } catch {
       setError("Unable to connect. Please try again later.");
     } finally {
@@ -242,10 +190,10 @@ export default function TrackOrder() {
   }
 
   return (
-    <section id="track" className="py-24 bg-text-primary">
+    <section id="track" className="py-24 bg-text-primary border-t border-white/10">
       <div className="max-w-3xl mx-auto px-6">
 
-        {/* Section header */}
+        {/* Header */}
         <div className="mb-12">
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-primary-400 mb-4">
             Order Tracking
@@ -254,107 +202,107 @@ export default function TrackOrder() {
             Track Your Order
           </h2>
           <p className="text-white/45 max-w-xl leading-relaxed">
-            Enter your SmartFab Lathe ticket number (SFL-...) or your LPO number to check the status of your order.
+            Enter your SmartFab Lathe ticket number (SFL-...) or your LPO number to check the real-time status of your order.
           </p>
         </div>
 
-        {/* Search form */}
+        {/* Search */}
         <form onSubmit={handleSearch} className="flex gap-3 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="SFL-20250101-0001 or your LPO number"
-              className="w-full pl-11 pr-4 py-4 rounded-lg bg-white/8 border border-white/15 text-white text-sm placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+              onChange={e => setQuery(e.target.value)}
+              placeholder="e.g. SFL-20260101-0001 or your LPO number"
+              className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/8 border border-white/15 text-white text-sm placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/50 transition"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="bg-primary-600 text-white px-6 py-4 rounded-lg font-semibold text-sm tracking-wide transition-all duration-300 hover:bg-primary-500 disabled:opacity-50 whitespace-nowrap"
+            className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-4 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 whitespace-nowrap flex items-center gap-2"
           >
-            {loading ? "Searching..." : "Track Order"}
+            {loading ? "Searching..." : <><span>Track Order</span><ChevronRight className="w-4 h-4" /></>}
           </button>
         </form>
 
         {/* Error */}
         {error && (
-          <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400">
+          <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400 mb-4">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Result card */}
+        {/* Result */}
         {result && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4 mb-6">
+
+            {/* Order header */}
+            <div className="flex items-start justify-between gap-4 mb-6 pb-5 border-b border-white/8">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Package className="w-4 h-4 text-primary-400" />
-                  <span className="text-xs font-semibold text-primary-400 uppercase tracking-widest">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Package className="w-3.5 h-3.5 text-primary-400" />
+                  <span className="text-xs font-bold text-primary-400 uppercase tracking-widest">
                     {result.ticket_id}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-white">{result.company_name}</h3>
-                <p className="text-sm text-white/45">{result.customer_name}</p>
+                <p className="text-sm text-white/70 mt-0.5 font-medium">{result.customer_name}</p>
                 {result.lpo_number && (
-                  <p className="text-xs text-white/25 mt-1">LPO: {result.lpo_number}</p>
+                  <p className="text-xs text-white/50 mt-1 font-mono">LPO: {result.lpo_number}</p>
                 )}
               </div>
-              <span
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap ${
-                  result.status === "CLOSED"
-                    ? "bg-green-500/20 border-green-500/30 text-green-400"
-                    : result.status === "ACTIVE_ORDER"
-                    ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
-                    : "bg-amber-500/20 border-amber-500/30 text-amber-400"
-                }`}
-              >
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${
+                result.status === "CLOSED"
+                  ? "bg-emerald-500/15 border-emerald-500/25 text-emerald-400"
+                  : result.status === "ACTIVE_ORDER"
+                  ? "bg-blue-500/15 border-blue-500/25 text-blue-400"
+                  : "bg-amber-500/15 border-amber-500/25 text-amber-400"
+              }`}>
                 {result.status_label}
               </span>
             </div>
 
-            {/* Overall timeline */}
-            <OverallTimeline statusLabel={result.status_label} />
+            {/* 4-step ticket timeline */}
+            <TicketTimeline statusLabel={result.status_label} />
+
+            {/* 7-step production pipeline — shown when order is active/closed */}
+            {result.overall_production_status && (
+              <ProductionPipeline currentStatus={result.overall_production_status} />
+            )}
 
             {/* Per-item breakdown */}
             {result.items.length > 0 && (
               <div>
-                <h4 className="text-xs font-semibold text-white/40 mb-3 uppercase tracking-widest">
-                  Item Status
-                </h4>
-                <div className="space-y-3">
-                  {result.items.map((item) => (
-                    <ItemRow key={item.sr_no} item={item} />
+                <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-3">
+                  Items — {result.items.length} line item{result.items.length !== 1 ? "s" : ""}
+                </p>
+                <div className="space-y-2.5">
+                  {result.items.map(item => (
+                    <ItemCard key={item.sr_no} item={item} />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Invoice */}
-            {result.status === "CLOSED" && result.invoice && (
-              <InvoiceCard invoice={result.invoice} />
-            )}
-
-            {result.status === "CLOSED" && !result.invoice && (
-              <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-sm text-green-400 mt-4">
-                <FileText className="w-4 h-4 shrink-0" />
-                <span>Your order is complete. Invoice will be sent to your email shortly.</span>
-              </div>
-            )}
-
+            {/* Pre-production */}
             {result.items.length === 0 && result.status !== "CLOSED" && (
               <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-400">
                 <Clock className="w-4 h-4 shrink-0" />
-                <span>
-                  Your order is being processed. Item-level tracking will be available once production begins.
-                </span>
+                <span>Your order is being processed. Item tracking will be available once production begins.</span>
               </div>
             )}
+
+            {/* Completed */}
+            {result.status === "CLOSED" && (
+              <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-sm text-emerald-400 mt-4">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>Your order is complete. Thank you for choosing SmartFab Lathe.</span>
+              </div>
+            )}
+
           </div>
         )}
       </div>

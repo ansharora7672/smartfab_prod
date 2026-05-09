@@ -123,7 +123,7 @@ export default function QuotePDFView() {
         <div className="flex w-full mb-2 relative z-20 items-center justify-between">
             {/* Logo scaled up visually to keep the container layout untouched */}
             <div className="w-[180px] h-[180px] shrink-0 relative ml-1 scale-[1.25]">
-                 <Image src="/SmartFab_FinalLogo_version.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
+                 <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
             </div>
             
             {/* Centered Massive Text */}

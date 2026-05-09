@@ -17,6 +17,7 @@ export default function HomePage() {
       <div className="h-px bg-white/8" />
       <Process />
       <TrackOrder />
+      <div className="h-px bg-white/8" />
       <Footer />
     </>
   );

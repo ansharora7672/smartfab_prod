@@ -5,8 +5,6 @@ from sqlmodel import select
 from app.database import get_session
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.quote import Quote, QuoteItem, ProductionStatusEnum
-from app.models.invoice import Invoice, InvoiceItem
-
 track_order_router = APIRouter(prefix="/public", tags=["Track Order"])
 
 TICKET_STATUS_LABELS = {
@@ -29,6 +27,16 @@ PRODUCTION_STATUS_LABELS = {
 }
 
 PRODUCTION_STATUS_ORDER = list(ProductionStatusEnum)
+
+def _overall_production_status(items: list) -> ProductionStatusEnum:
+    """Return the stage of the most-behind item (order bottleneck)."""
+    if not items:
+        return ProductionStatusEnum.ORDER_RECEIVED
+    present = {item.production_status for item in items}
+    for s in PRODUCTION_STATUS_ORDER:
+        if s in present:
+            return s
+    return ProductionStatusEnum.ORDER_RECEIVED
 
 
 @track_order_router.get("/track-order")
@@ -58,8 +66,11 @@ async def track_order(
         "lpo_number": ticket.lpo_number,
         "status": ticket.status,
         "status_label": TICKET_STATUS_LABELS.get(ticket.status, ticket.status),
+        "overall_production_status": None,
+        "overall_production_status_label": None,
+        "overall_production_step": None,
+        "total_production_steps": len(PRODUCTION_STATUS_ORDER) - 1,
         "items": [],
-        "invoice": None,
     }
 
     # Load item-level detail when order is active or closed
@@ -72,6 +83,11 @@ async def track_order(
             items_stmt = select(QuoteItem).where(QuoteItem.quote_id == quote.id)
             items_result = await db.execute(items_stmt)
             items = items_result.scalars().all()
+
+            overall = _overall_production_status(items)
+            response["overall_production_status"] = overall.value
+            response["overall_production_status_label"] = PRODUCTION_STATUS_LABELS.get(overall, overall.value)
+            response["overall_production_step"] = PRODUCTION_STATUS_ORDER.index(overall)
 
             response["items"] = [
                 {
@@ -87,38 +103,5 @@ async def track_order(
                 }
                 for item in sorted(items, key=lambda i: i.sr_no)
             ]
-
-    # For completed orders, also fetch the invoice
-    if ticket.status == TicketStatusEnum.CLOSED:
-        inv_stmt = select(Invoice).where(Invoice.ticket_id == ticket.id).order_by(Invoice.created_at.desc())
-        inv_result = await db.execute(inv_stmt)
-        invoice = inv_result.scalars().first()
-
-        if invoice:
-            inv_items_stmt = select(InvoiceItem).where(InvoiceItem.invoice_id == invoice.id).order_by(InvoiceItem.sr_no)
-            inv_items_result = await db.execute(inv_items_stmt)
-            inv_items = inv_items_result.scalars().all()
-
-            response["invoice"] = {
-                "invoice_no": invoice.invoice_no,
-                "status": invoice.status,
-                "taxable_value": invoice.taxable_value,
-                "vat_total": invoice.vat_total,
-                "invoice_total": invoice.invoice_total,
-                "payment_terms": invoice.payment_terms,
-                "amount_chargeable_words": invoice.amount_chargeable_words,
-                "created_at": invoice.created_at.isoformat(),
-                "items": [
-                    {
-                        "sr_no": i.sr_no,
-                        "description_of_service": i.description_of_service,
-                        "quantity": i.quantity,
-                        "per": i.per,
-                        "amount": i.amount,
-                        "total_incl_vat": i.total_incl_vat,
-                    }
-                    for i in inv_items
-                ],
-            }
 
     return response

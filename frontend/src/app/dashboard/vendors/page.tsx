@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Mail, Phone, X, Building2, Send, Tag } from "lucide-react";
+import { Plus, Mail, Phone, X, Building2, Send, Tag, Search } from "lucide-react";
 
 const emptyVendor = {
   vendor_name: "",
@@ -30,6 +30,9 @@ export default function VendorsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newVendor, setNewVendor] = useState({ ...emptyVendor });
   const [savingVendor, setSavingVendor] = useState(false);
+
+  // Search
+  const [search, setSearch] = useState("");
 
   // RFQ inquiry modal
   const [rfqVendor, setRfqVendor] = useState<any | null>(null);
@@ -124,6 +127,17 @@ export default function VendorsPage() {
   const inputClass =
     "w-full bg-section-bg border border-border rounded-xl px-4 py-3 text-sm text-text-primary focus:bg-white focus:border-primary-600 outline-none transition-colors";
 
+  const q = search.toLowerCase().trim();
+  const filteredVendors = q
+    ? vendors.filter(v =>
+        v.company_name?.toLowerCase().includes(q) ||
+        v.vendor_name?.toLowerCase().includes(q) ||
+        v.contact_name?.toLowerCase().includes(q) ||
+        v.address?.toLowerCase().includes(q) ||
+        v.services_offered?.some((s: string) => s.toLowerCase().includes(q))
+      )
+    : vendors;
+
   if (loading) return <div className="p-8 text-muted animate-pulse">Loading vendor network...</div>;
 
   return (
@@ -203,9 +217,36 @@ export default function VendorsPage() {
         </form>
       )}
 
+      {/* Search Bar */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, location, or service..."
+            className="w-full bg-white border border-border rounded-xl pl-10 pr-9 py-2.5 text-sm text-text-primary placeholder:text-muted focus:border-primary-600 focus:outline-none transition-colors shadow-[0_2px_8px_rgba(0,0,0,0.03)]"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text-primary transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {q && (
+          <span className="text-sm text-muted font-medium">
+            {filteredVendors.length} {filteredVendors.length === 1 ? "vendor" : "vendors"} found
+          </span>
+        )}
+      </div>
+
       {/* Vendor Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {vendors.map((v) => (
+        {filteredVendors.map((v) => (
           <div
             key={v.id}
             className="group bg-white border border-border rounded-2xl p-6 shadow-[0_2px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_30px_rgba(0,0,0,0.06)] hover:border-primary-200 transition-all duration-500 flex flex-col relative"
@@ -283,11 +324,20 @@ export default function VendorsPage() {
           </div>
         ))}
 
-        {vendors.length === 0 && !isAddOpen && (
+        {filteredVendors.length === 0 && (
           <div className="col-span-full py-16 text-center border-2 border-dashed border-border rounded-2xl bg-section-bg/30">
             <Building2 className="w-10 h-10 text-border mx-auto mb-4" />
-            <h3 className="text-text-primary font-bold text-base">No vendors yet</h3>
-            <p className="text-muted text-sm mt-1">Click "Add Vendor" to build your supplier network.</p>
+            {q ? (
+              <>
+                <h3 className="text-text-primary font-bold text-base">No vendors match "{search}"</h3>
+                <p className="text-muted text-sm mt-1">Try a different name, location, or service.</p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-text-primary font-bold text-base">No vendors yet</h3>
+                <p className="text-muted text-sm mt-1">Click "Add Vendor" to build your supplier network.</p>
+              </>
+            )}
           </div>
         )}
       </div>
