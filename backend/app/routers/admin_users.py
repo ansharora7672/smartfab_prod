@@ -229,3 +229,45 @@ async def update_user_status(
     await db.commit()
     status_text = "activated" if data.is_active else "deactivated"
     return {"message": f"User {user.full_name} {status_text} successfully"}
+
+
+# endpoint to permanently delete a user (Admin only)
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized. Admin access required."
+        )
+
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account."
+        )
+
+    statement = select(User).where(User.id == user_id)
+    result = await db.execute(statement)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent deleting the last active admin
+    if user.role == UserRole.ADMIN:
+        admin_count_stmt = select(User).where(User.role == UserRole.ADMIN, User.is_active == True)
+        admin_result = await db.execute(admin_count_stmt)
+        admin_count = len(admin_result.scalars().all())
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the last active admin."
+            )
+
+    await db.delete(user)
+    await db.commit()
+    return {"message": f"{user.full_name} has been permanently deleted."}

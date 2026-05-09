@@ -32,3 +32,6 @@ Thumbs.db
 # Misc
 # ========================
 *.log                 
+
+.claude
+.PVS-Studio
