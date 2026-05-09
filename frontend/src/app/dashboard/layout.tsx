@@ -397,14 +397,25 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* MAIN AREA */}
       <div className="flex flex-col flex-1 min-h-screen lg:ml-64 print:ml-0 print:min-h-0 bg-section-bg print:bg-white">
         {/* MOBILE TOP BAR */}
-        <header className="sticky top-0 z-30 flex items-center justify-between p-4 bg-white border-b lg:hidden border-border print:hidden">
-          <button onClick={() => setSidebarOpen(true)}>
-            <Menu className="w-5 h-5 text-text-primary" />
+        <header className="sticky top-0 z-30 flex items-center justify-between px-5 py-4 bg-white border-b lg:hidden border-border print:hidden shadow-sm">
+          <button onClick={() => setSidebarOpen(true)} className="p-1 -ml-1 text-primary-900 hover:bg-section-bg rounded-lg transition-colors">
+            <Menu className="w-6 h-6" />
           </button>
-          <span className="text-sm font-bold tracking-wider font-heading text-primary-900">
-            SMARTFAB LATHE
-          </span>
-          <div className="w-5" />
+          
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/smartfab_white_logo.png"
+              alt="SmartFab Logo"
+              width={32}
+              height={32}
+              className="shrink-0 object-contain"
+            />
+            <span className="text-[15px] font-extrabold tracking-widest font-heading text-primary-900 uppercase">
+              SmartFab Lathe
+            </span>
+          </div>
+          
+          <div className="w-8" />
         </header>
 
         <main className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">{children}</main>

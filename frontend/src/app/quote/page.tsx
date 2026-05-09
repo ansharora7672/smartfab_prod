@@ -54,7 +54,7 @@ export default function QuotePage() {
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/tickets/available-slots`)
         .then(res => res.json())
         .then(data => setAvailableSlots(data))
-        .catch(err => console.error(err));
+        .catch(() => {});
     }
   }, [step]);
 

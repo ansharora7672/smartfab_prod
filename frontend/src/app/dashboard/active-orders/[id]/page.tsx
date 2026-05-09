@@ -230,8 +230,8 @@ export default function ActiveOrderDetailPage() {
       {feedback && (
         <div className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-xl border text-sm font-medium shadow-lg transition-all ${
           feedback.type === "success"
-            ? "bg-success-bg border-success/20 text-success"
-            : "bg-danger-bg border-danger/20 text-danger"
+            ? "bg-[#DCFCE7] border-[#16A34A]/20 text-[#16A34A]"
+            : "bg-[#FEE2E2] border-[#DC2626]/20 text-[#DC2626]"
         }`}>
           {feedback.message}
         </div>
@@ -383,7 +383,7 @@ export default function ActiveOrderDetailPage() {
 
         {/* Items table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm min-w-215">
+          <table className="w-full text-left text-sm min-w-[1000px]">
             <thead>
               <tr className="border-b border-border/60">
                 <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Description</th>

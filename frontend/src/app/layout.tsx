@@ -30,10 +30,10 @@ const inter = Inter({
 // This is what Google reads when it crawls the site
 export const metadata: Metadata = {
   title: {
-    default: "SMARTFAB LATHE",
+    default: "SmartFab Lathe",
     // "template" lets other pages set their own title
     // e.g., a page sets title = "About" → becomes "About | SmartFab Lathe"
-    template: "%s | SMARTFAB LATHE",
+    template: "%s | SmartFab Lathe",
   },
   description:
     "SmartFab Lathe offers CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai. Engineering Accuracy. Crafted in metal. Get a quote today.",

@@ -37,43 +37,29 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 
-# ============================================================
-# LIFESPAN — Startup & Shutdown Events
-# ============================================================
-# The "lifespan" function runs code when the app starts and stops.
-# This is the modern way in FastAPI (replaces old @app.on_event).
-#
-# Code BEFORE 'yield' runs on STARTUP (connect to DB, etc.)
-# Code AFTER 'yield' runs on SHUTDOWN (close connections, cleanup)
-# ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Runs when the app starts up and shuts down.
-    """
-    # --- STARTUP ---
     print(f" Starting SmartFab Lathe API in {settings.APP_ENV} mode")
-    await init_db()  # Create database tables
+    await init_db()
     print(" Database tables initialized")
-    await bootstrap_admin()  # Create first admin if DB is empty
-    
+    await bootstrap_admin()
     start_scheduler()
-
-    yield  # App is running and handling requests here
-
-    # --- SHUTDOWN ---
+    yield
     print(" Shutting down SmartFab Lathe API")
     stop_scheduler()
 
 
-# ============================================================
-# CREATE THE FASTAPI APP
-# ============================================================
+_is_dev = settings.APP_ENV == "development"
+
 app = FastAPI(
     title="SmartFab Lathe API",
     description="Order and workflow management API for SmartFab Lathe manufacturing services",
     version="0.1.0",
     lifespan=lifespan,
+    # Disable interactive API docs in production — they expose all endpoints publicly
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
 )
 
 # Set up global rate limiting to mitigate DDoS vectors
@@ -81,20 +67,15 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ============================================================
-# CORS MIDDLEWARE
-# ============================================================
-# CORS = Cross-Origin Resource Sharing
-#
-# In production, you'd replace ["*"] with your actual domain:
-# ["https://smartfablathe.com"]
-# ============================================================
+# Allow requests from the configured frontend origin only
+_allowed_origins = [settings.FRONTEND_URL]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],        # Which frontends can call us (* = all, restrict in production)
-    allow_credentials=True,      # Allow cookies/auth headers
-    allow_methods=["*"],         # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],         # Allow all headers
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

@@ -64,12 +64,17 @@ export default function NewDeliveryNotePage() {
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/orders/active`, { credentials: "include" }),
         ]);
 
+        let currentLpo = "";
+
         if (ticketRes.ok) {
           const t = await ticketRes.json();
           setCompanyName(t.company_name || "");
           setAddress(t.company_address || "");
           setPhoneNumber(t.phone_number || "");
-          if (t.lpo_number) setLpoNo(t.lpo_number);
+          if (t.lpo_number) {
+            setLpoNo(t.lpo_number);
+            currentLpo = t.lpo_number;
+          }
         }
 
         if (ordersRes.ok) {
@@ -77,6 +82,9 @@ export default function NewDeliveryNotePage() {
           const order = orders.find((o: any) => o.quote.id === quote_id);
           if (order) {
             setAllItems(order.quote.items);
+            if (!currentLpo && order.quote.lpo_no) {
+              setLpoNo(order.quote.lpo_no);
+            }
           }
         }
       } catch (err) {

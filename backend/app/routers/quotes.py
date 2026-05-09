@@ -1,9 +1,12 @@
+import asyncio
 import uuid
 import datetime as dt
 import threading
+import traceback
+from urllib.parse import urlparse
 from jose import jwt
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, func
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +16,7 @@ from app.models.quote import Quote, QuoteItem, QuoteStatusEnum
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User, UserRole
 from app.routers.auth import get_current_user
-from app.schemas.quote import QuoteCreate
+from app.schemas.quote import QuoteCreate, OverrideStatusRequest
 from app.schemas.lpo import LPOSubmitRequest, LPOStaffEntryRequest
 from app.services.emails import (
     send_quote_email,
@@ -268,6 +271,139 @@ async def send_quote_to_client(
     await db.commit()
     
     return {"message": f"Quote {quote.quote_no} was successfully sent to {ticket.email}"}
+
+
+# =============================================================================
+# STAFF/ADMIN ENDPOINT — Download quote as PDF (direct file, no page nav)
+# =============================================================================
+@quotes_router.get("/{quote_id}/download")
+async def download_quote_pdf(
+    quote_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.STAFF):
+        raise HTTPException(status_code=403, detail="Not authorised.")
+
+    quote = await db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    # Pass the auth cookie so Playwright can access the authenticated frontend page
+    access_token = request.cookies.get("access_token", "")
+    frontend_url = f"{settings.FRONTEND_URL}/dashboard/quotes/{quote_id}/pdf"
+
+    def _render_page_to_pdf() -> bytes:
+        from playwright.sync_api import sync_playwright
+        parsed = urlparse(settings.FRONTEND_URL)
+        cookie_domain = parsed.hostname or "localhost"
+        cookie_secure = parsed.scheme == "https"
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                ctx = browser.new_context()
+                if access_token:
+                    ctx.add_cookies([{
+                        "name": "access_token",
+                        "value": access_token,
+                        "domain": cookie_domain,
+                        "path": "/",
+                        "httpOnly": True,
+                        "secure": cookie_secure,
+                    }])
+                page = ctx.new_page()
+                page.goto(frontend_url, wait_until="networkidle", timeout=30000)
+                # Hide the non-printable action bar (Back / Status / Email / Save buttons)
+                page.evaluate("() => { const el = document.querySelector('.print\\\\:hidden'); if(el) el.style.display='none'; }")
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+                )
+                browser.close()
+                return pdf_bytes
+        except Exception as e:
+            print(f"[PDF DOWNLOAD ERROR] {e}")
+            return b""
+
+    try:
+        pdf_bytes = await asyncio.to_thread(_render_page_to_pdf)
+    except Exception:
+        err = traceback.format_exc()
+        print(f"[PDF DOWNLOAD ERROR]\n{err}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {err[:300]}")
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=500, detail="Failed to render PDF — check server logs")
+
+    filename = f"Quote_{quote.quote_no.replace('/', '-')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# =============================================================================
+# STAFF/ADMIN ENDPOINT — Manually override quote & ticket status
+# =============================================================================
+@quotes_router.patch("/{quote_id}/override-status")
+async def override_quote_status(
+    quote_id: uuid.UUID,
+    body: OverrideStatusRequest,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.ADMIN, UserRole.STAFF):
+        raise HTTPException(status_code=403, detail="Only staff and admins can override quote status.")
+
+    quote = await db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    ticket = await db.get(Ticket, quote.ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    now = dt.datetime.now(dt.timezone.utc)
+    new_status = body.new_status
+
+    quote.status = new_status
+    quote.updated_at = now
+
+    if new_status == QuoteStatusEnum.APPROVED:
+        # Move ticket to active production
+        ticket.status = TicketStatusEnum.ACTIVE_ORDER
+        ticket.approved_quote_id = quote.id
+        ticket.quote_approved_at = now
+
+    elif new_status == QuoteStatusEnum.REJECTED:
+        # Close the ticket; clear approval linkage if this quote was the approved one
+        ticket.status = TicketStatusEnum.CLOSED
+        if ticket.approved_quote_id == quote.id:
+            ticket.approved_quote_id = None
+            ticket.quote_approved_at = None
+
+    elif new_status in (QuoteStatusEnum.SENT, QuoteStatusEnum.MODIFICATION_REQUESTED, QuoteStatusEnum.DRAFT):
+        # Reopen ticket back into quote preparation if it was closed or in active orders
+        if ticket.status in (TicketStatusEnum.CLOSED, TicketStatusEnum.ACTIVE_ORDER):
+            ticket.status = TicketStatusEnum.IN_QUOTE_PREPARATION
+        # Clear approval linkage if this quote was previously the approved one
+        if ticket.approved_quote_id == quote.id:
+            ticket.approved_quote_id = None
+            ticket.quote_approved_at = None
+
+    ticket.updated_at = now
+    db.add(quote)
+    db.add(ticket)
+    await db.commit()
+
+    return {
+        "quote_id": str(quote.id),
+        "new_quote_status": quote.status.value,
+        "ticket_status": ticket.status.value,
+    }
 
 
 # =============================================================================

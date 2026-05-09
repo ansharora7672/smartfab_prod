@@ -206,7 +206,7 @@ async def get_completed_tickets(
     current_user: User = Depends(get_current_user)
 ):
     from app.models.invoice import Invoice, InvoiceItem
-    from app.models.quote import Quote, QuoteItem
+    from app.models.quote import Quote, QuoteItem, QuoteStatusEnum
 
     statement = (
         select(Ticket, User.full_name)
@@ -244,11 +244,33 @@ async def get_completed_tickets(
             items_res = await db.execute(items_stmt)
             item_count = items_res.scalar() or 0
 
+        # For declined tickets (no approved quote), fetch the rejected quote summary
+        declined_quote = None
+        if not ticket.approved_quote_id:
+            rejected_stmt = (
+                select(Quote)
+                .where(Quote.ticket_id == ticket.id, Quote.status == QuoteStatusEnum.REJECTED)
+                .order_by(Quote.updated_at.desc())
+            )
+            rejected_res = await db.execute(rejected_stmt)
+            rejected_quote_obj = rejected_res.scalars().first()
+            if rejected_quote_obj:
+                total_stmt = select(func.sum(QuoteItem.total_amount)).where(QuoteItem.quote_id == rejected_quote_obj.id)
+                total_res = await db.execute(total_stmt)
+                quote_total = total_res.scalar() or 0.0
+                declined_quote = {
+                    "id": str(rejected_quote_obj.id),
+                    "quote_no": rejected_quote_obj.quote_no,
+                    "quote_total": quote_total,
+                    "updated_at": rejected_quote_obj.updated_at.isoformat(),
+                }
+
         response.append({
             **ticket.model_dump(),
             "assignee_name": assignee_name,
             "invoice": invoice_summary,
             "item_count": item_count,
+            "declined_quote": declined_quote,
         })
 
     return response

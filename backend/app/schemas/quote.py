@@ -36,6 +36,9 @@ class QuoteBase(BaseModel):
 class QuoteCreate(QuoteBase):
     items: List[QuoteItemCreate]
 
+class OverrideStatusRequest(BaseModel):
+    new_status: QuoteStatusEnum
+
 class QuoteResponse(QuoteBase):
     id: uuid.UUID
     quote_no: str

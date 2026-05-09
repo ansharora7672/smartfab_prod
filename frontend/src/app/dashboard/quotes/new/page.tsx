@@ -17,6 +17,7 @@ export default function NewQuotePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const ticket_id = searchParams.get("ticket_id");
+  const quote_id = searchParams.get("quote_id");
 
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -50,40 +51,64 @@ export default function NewQuotePage() {
     }
   }, [feedback]);
 
-  // Pre-fill the Quote Details if coming from a ticket link
+  // If editing a draft, load all existing data (fields + line items)
   useEffect(() => {
+    if (!quote_id) return;
+    const fetchDraft = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/quotes/quote/${quote_id}`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Could not fetch draft");
+        const data = await res.json();
+        const q = data.quote;
+        setCompanyName(q.company_name || "");
+        setAddress(q.address || "");
+        setPhoneNo(q.phone_no || "");
+        setLpoNo(q.lpo_no || "");
+        setLeadTimeApprox(q.lead_time_approx || "");
+        if (q.items && q.items.length > 0) {
+          setItems(q.items.map((item: any, i: number) => ({
+            sr_no: i + 1,
+            item_description: item.item_description,
+            qty: item.qty,
+            u_price: item.u_price,
+            total_amount: item.total_amount,
+          })));
+        }
+      } catch (err: any) {
+        setFeedback({ type: "error", message: "Failed to load draft data. You can fill it in manually." });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDraft();
+  }, [quote_id]);
+
+  // Pre-fill from ticket only when creating fresh (no existing draft to load)
+  useEffect(() => {
+    if (!ticket_id || quote_id) return;
     const fetchTicketData = async () => {
-      if (!ticket_id) return;
-      
       try {
         setLoading(true);
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tickets/${ticket_id}`, {
-          // Send credentials to access the internal endpoint securely
-          credentials: "include" 
+          credentials: "include",
         });
-        
         if (!res.ok) throw new Error("Could not fetch ticket details");
-        
         const data = await res.json();
-        
-        // Populate the editable form fields!
         setCompanyName(data.company_name || "");
         setAddress(data.company_address || "");
         setPhoneNo(data.phone_number || "");
-        
-        // If an LPO already happened somehow, prepopulate that too
         if (data.lpo_number) setLpoNo(data.lpo_number);
-
       } catch (err: any) {
-        console.error(err);
         setFeedback({ type: "error", message: "Failed to load pre-fill data. You can enter them manually." });
       } finally {
         setLoading(false);
       }
     };
-
     fetchTicketData();
-  }, [ticket_id]);
+  }, [ticket_id, quote_id]);
 
   const handleAddItem = () => {
     setItems([
