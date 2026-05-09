@@ -215,7 +215,7 @@ export default function TrackOrder() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="e.g. SFL-20260101-0001 or your LPO number"
-              className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/8 border border-white/15 text-white text-sm placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/50 transition"
+              className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/8 border border-white/15 text-white !text-white text-sm placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/50 transition"
             />
           </div>
           <button
