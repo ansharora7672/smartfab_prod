@@ -109,7 +109,7 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = "Welcome to SmartFab Lathe — Your Account is Ready"
+        msg["Subject"] = "Welcome to SmartFab Lathe - Your Account is Ready"
 
         # Attach the HTML body as the email content
         # "html" tells the email client to render it as a web page, not plain text
@@ -191,7 +191,7 @@ def send_password_reset_email(to_email: str, full_name: str, temp_password: str)
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = "SmartFab Lathe — Password Reset Request"
+        msg["Subject"] = "SmartFab Lathe - Password Reset Request"
 
         msg.attach(MIMEText(html_body, "html"))
 
@@ -415,15 +415,15 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
             </p>
             <div>
                 <a href="{approve_url}" 
-                   style="display: inline-block; background: #16A34A; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
+                   style="display: inline-block; background: #1E3A8A; color: #FFFFFF; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px; border: 1px solid #1E3A8A;">
                     Approve Quote
                 </a>
                 <a href="{modify_url}" 
-                   style="display: inline-block; background: #F59E0B; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
+                   style="display: inline-block; background: #FFFFFF; color: #334155; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px; border: 1px solid #CBD5E1;">
                     Request Changes
                 </a>
                 <a href="{reject_url}" 
-                   style="display: inline-block; background: #DC2626; color: #FFFFFF; padding: 12px 28px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px;">
+                   style="display: inline-block; background: #FFFFFF; color: #DC2626; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px 6px; border: 1px solid #FECACA;">
                     Decline Quote
                 </a>
             </div>
@@ -446,7 +446,7 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
         msg = MIMEMultipart("mixed")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {quote_no} — SmartFab Lathe Manufacturing Services"
+        msg["Subject"] = f"Quote {quote_no} - SmartFab Lathe Manufacturing Services"
         
         # Attach the HTML body (the email text the customer sees)
         msg.attach(MIMEText(html_body, "html"))
@@ -491,42 +491,52 @@ def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: 
     lpo_submit_url = f"{settings.FRONTEND_URL}/lpo-submit?token={token}"
     
     html_body = f"""
-    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+    <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A; background: #FFFFFF;">
+        <!-- Premium Header -->
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Services</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
         
-        <div style="background: #DCFCE7; border: 1px solid rgba(22,163,74,0.2); border-radius: 16px; padding: 32px; margin-bottom: 24px;">
+        <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
             <p style="font-size: 15px; color: #334155; margin: 0 0 12px 0;">
-                Hi <strong>{customer_name}</strong>,
+                Dear <strong>{customer_name}</strong>,
             </p>
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
                 Thank you for approving Quote <strong>{invoice_no}</strong>! We're excited to get started on your project.
             </p>
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 24px 0;">
-                To proceed, we need your <strong>Local Purchase Order (LPO) number</strong>. Please click the button below to submit it:
+                To proceed, we require your <strong>Local Purchase Order (LPO) number</strong>. Please click the secure button below to submit it:
             </p>
             
             <!-- PRIMARY CTA — Submit LPO Number -->
             <div style="text-align: center; margin-bottom: 24px;">
                 <a href="{lpo_submit_url}" 
-                   style="display: inline-block; background: #2563EB; color: #FFFFFF; padding: 14px 40px; border-radius: 12px; text-decoration: none; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;">
+                   style="display: inline-block; background: #1E3A8A; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; letter-spacing: 0.3px; border: 1px solid #1E3A8A;">
                     Submit Your LPO Number
                 </a>
             </div>
             
             <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px;">
-                <p style="font-size: 12px; color: #64748B; margin: 0; line-height: 1.6;">
+                <p style="font-size: 13px; color: #64748B; margin: 0; line-height: 1.6;">
                     Alternatively, you can send your LPO document to<br/>
-                    <a href="mailto:lathe.smartfab@gmail.com" style="font-weight: 700; color: #2563EB; text-decoration: none;">
+                    <a href="mailto:lathe.smartfab@gmail.com" style="font-weight: 600; color: #1E3A8A; text-decoration: none;">
                         lathe.smartfab@gmail.com
                     </a>
                 </p>
             </div>
             
-            <p style="font-size: 13px; color: #64748B; line-height: 1.6; margin: 0;">
-                Once we receive your LPO, we'll begin coordinating with our vendors and start production. You'll receive updates at every stage.
+            <p style="font-size: 13px; color: #334155; line-height: 1.6; margin: 0; text-align: center;">
+                Once we receive your LPO, we will start production. You'll receive updates at every stage of the process.
             </p>
         </div>
         
@@ -540,7 +550,7 @@ def send_approval_followup_email(to_email: str, customer_name: str, invoice_no: 
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {invoice_no} Approved — Submit Your LPO"
+        msg["Subject"] = f"Quote {invoice_no} Approved - Submit Your LPO"
         msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -573,7 +583,7 @@ def send_rejection_followup_email(to_email: str, customer_name: str, invoice_no:
                 Hi <strong>{customer_name}</strong>,
             </p>
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
-                We noticed you've declined Quote <strong>{invoice_no}</strong>. We completely understand — and we'd genuinely appreciate your feedback so we can improve.
+                We noticed you've declined Quote <strong>{invoice_no}</strong>. We completely understand - and we'd genuinely appreciate your feedback so we can improve.
             </p>
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
                 Could you take a moment to let us know what influenced your decision? Common reasons include:
@@ -603,7 +613,7 @@ def send_rejection_followup_email(to_email: str, customer_name: str, invoice_no:
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"We'd Love Your Feedback — Quote {invoice_no}"
+        msg["Subject"] = f"We'd Love Your Feedback - Quote {invoice_no}"
         msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -657,7 +667,7 @@ def send_modification_followup_email(to_email: str, customer_name: str, invoice_
         msg = MIMEMultipart("alternative")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {invoice_no} — Modification Request Received"
+        msg["Subject"] = f"Quote {invoice_no} - Modification Request Received"
         msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -710,7 +720,7 @@ def send_staff_quote_response_notification(
             </p>
         </div>
         <p style="font-size: 12px; color: #94A3B8; text-align: center; margin: 0;">
-            SmartFab Lathe — Internal Notification
+            SmartFab Lathe - Internal Notification
         </p>
     </div>
     """

@@ -238,13 +238,15 @@ export default function InvoicePDFPage() {
         </div>
 
         {/* Signature — SmartFab only */}
-        <div className="flex justify-end border border-black min-h-[70px]">
-          <div className="w-[40%] p-2 flex flex-col justify-between">
+        <div className="flex justify-end border border-black min-h-[100px]">
+          <div className="w-[45%] p-2 flex flex-col justify-between">
             <div className="font-bold text-[8.5px]">For SmartFab Lathe</div>
-            <div className="relative h-[40px] mix-blend-multiply">
-              <Image src="/signature.png" alt="" layout="fill" objectFit="contain" unoptimized priority />
+            <div className="flex w-full justify-center relative z-10 mix-blend-multiply">
+              <div className="relative w-[200px] h-[80px]">
+                <Image src="/signature.png" alt="" layout="fill" objectFit="contain" unoptimized priority />
+              </div>
             </div>
-            <div className="text-[6.5px] text-[#666] text-right">Authorised Signatory</div>
+            <div className="text-[6.5px] text-[#666] text-right border-t border-black pt-1 mt-1">Authorised Signatory</div>
           </div>
         </div>
 

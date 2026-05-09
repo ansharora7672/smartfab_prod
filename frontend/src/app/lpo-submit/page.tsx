@@ -2,6 +2,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, FileText } from "lucide-react";
 
@@ -194,12 +196,29 @@ function LpoSubmitContent() {
 export default function LpoSubmitPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pt-16">
-      {/* Header bar */}
-      <header className="w-full bg-white border-b border-slate-200 py-6 px-8 flex justify-center mb-16 shadow-sm">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-blue-900 tracking-tight font-jakarta">SmartFab Lathe</h1>
-          <p className="text-slate-500 text-sm tracking-widest uppercase mt-1">Manufacturing Hub</p>
-        </div>
+      {/* Premium Header bar matching landing page */}
+      <header className="w-full bg-[#080C14] py-6 px-8 flex justify-center mb-16 shadow-[0_4px_30px_rgba(0,0,0,0.1)] border-b border-white/10">
+        <Link href="/" className="flex items-center gap-0 hover:opacity-90 transition-opacity">
+          <Image
+            src="/SmartFab_FinalLogo.png"
+            alt="SmartFab Lathe"
+            width={80}
+            height={80}
+            className="object-contain"
+          />
+          <div className="flex flex-col items-start leading-none">
+            <span className="font-heading font-bold text-base tracking-[0.2em] text-white">
+              SMARTFAB
+            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="block w-4 h-px bg-white/40" />
+              <span className="font-heading font-semibold text-[10px] tracking-[0.3em] text-white/60">
+                LATHE
+              </span>
+              <span className="block w-4 h-px bg-white/40" />
+            </div>
+          </div>
+        </Link>
       </header>
 
       {/* Main Content */}

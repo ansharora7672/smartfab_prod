@@ -77,16 +77,27 @@ export default function NewInvoicePage() {
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tickets/${ticket_id}`, { credentials: "include" }),
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/orders/active`, { credentials: "include" }),
         ]);
+
+        let currentLpo = "";
+
         if (ticketRes.ok) {
           const t = await ticketRes.json();
           setCompanyName(t.company_name || "");
-          if (t.lpo_number) { setLpoNo(t.lpo_number); setBuyersOrderNo(t.lpo_number); }
+          if (t.lpo_number) {
+            setLpoNo(t.lpo_number);
+            setBuyersOrderNo(t.lpo_number);
+            currentLpo = t.lpo_number;
+          }
         }
         if (ordersRes.ok) {
           const orders = await ordersRes.json();
           const order = orders.find((o: any) => o.quote.id === quote_id);
           if (order) {
             setQuoteNo(order.quote.quote_no);
+            if (!currentLpo && order.quote.lpo_no) {
+              setLpoNo(order.quote.lpo_no);
+              setBuyersOrderNo(order.quote.lpo_no);
+            }
             // Pre-fill items from quote
             if (order.quote.items?.length) {
               setItems(order.quote.items.map((qi: any, idx: number) => ({

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Printer, Send, Phone, MapPin, Mail } from "lucide-react";
+import { ArrowLeft, ChevronDown, Printer, Send, Phone, MapPin, Mail } from "lucide-react";
 import Image from "next/image";
 
 // WhatsApp Custom Icon
@@ -22,6 +22,40 @@ export default function QuotePDFView() {
   
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+
+  const STATUS_OPTIONS = [
+    { value: "SENT",                   label: "Re-open — Back to Quote Prep" },
+    { value: "APPROVED",               label: "Mark as Approved → Active Orders" },
+    { value: "MODIFICATION_REQUESTED", label: "Mark as Changes Requested" },
+    { value: "REJECTED",               label: "Mark as Declined" },
+  ];
+
+  const handleOverrideStatus = async (newStatus: string) => {
+    setOverriding(true);
+    setStatusMenuOpen(false);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/quotes/${quote_id}/override-status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_status: newStatus }),
+        }
+      );
+      if (!res.ok) throw new Error("Failed to override status");
+      const data = await res.json();
+      setQuote({ ...quote, status: data.new_quote_status });
+      setFeedback({ type: "success", message: `Status updated to ${data.new_quote_status}` });
+    } catch {
+      setFeedback({ type: "error", message: "Failed to update status." });
+    } finally {
+      setOverriding(false);
+    }
+  };
 
   // Auto-dismiss alerts
   useEffect(() => {
@@ -41,14 +75,23 @@ export default function QuotePDFView() {
         const data = await res.json();
         setQuote(data.quote);
         setLoading(false);
-      } catch (err) {
-        console.error("Failed to load PDF data", err);
+      } catch {
+        // silently handle fetch errors — loading state stays true
       }
     };
     fetchData();
   }, [quote_id]);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const originalTitle = document.title;
+    const clientName = quote.company_name ? quote.company_name.replace(/[\s\/\\]+/g, '_') : 'Client';
+    const ticketNumber = quote.quote_no ? quote.quote_no.replace(/[\s\/\\]+/g, '_') : 'Ticket';
+    document.title = `SmartFabLathe_Quote_${clientName}_${ticketNumber}`;
+    window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
 
   const handleSendEmail = async () => {
     setSending(true);
@@ -90,14 +133,36 @@ export default function QuotePDFView() {
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           
-          {/* Quote Status Bubble */}
-          <span className={`text-[11px] font-bold px-3 py-1.5 rounded-md border 
-            ${quote.status === "DRAFT" ? "bg-slate-100 text-slate-600 border-slate-200" : 
-              quote.status === "APPROVED" ? "bg-green-100 text-green-700 border-green-200" : 
-              quote.status === "REJECTED" ? "bg-red-100 text-red-700 border-red-200" : 
-              "bg-blue-100 text-blue-700 border-blue-200"}`}>
-            STATUS: {quote.status}
-          </span>
+          {/* Quote Status + Override */}
+          <div className="relative" ref={statusMenuRef}>
+            <button
+              onClick={() => setStatusMenuOpen((o) => !o)}
+              disabled={overriding}
+              className={`flex items-center gap-2 text-[11px] font-bold px-3 py-1.5 rounded-md border transition-opacity disabled:opacity-50
+                ${quote.status === "DRAFT"    ? "bg-slate-100 text-slate-600 border-slate-200" :
+                  quote.status === "APPROVED" ? "bg-green-100 text-green-700 border-green-200" :
+                  quote.status === "REJECTED" ? "bg-red-100 text-red-700 border-red-200" :
+                  "bg-blue-100 text-blue-700 border-blue-200"}`}
+            >
+              STATUS: {overriding ? "UPDATING…" : quote.status}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+
+            {statusMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 text-left">
+                <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Override Status</p>
+                {STATUS_OPTIONS.filter((o) => o.value !== quote.status).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleOverrideStatus(opt.value)}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -177,7 +242,7 @@ export default function QuotePDFView() {
              </div>
              <div className="flex w-[40%] items-end gap-2 pl-4">
                <span className="shrink-0 tracking-widest">DATE :</span>
-               <div className="border-b-[1.5px] border-black flex-1 pb-1 text-center tracking-normal font-sans text-black"> {new Date(quote.quote_date).toLocaleDateString()} </div>
+               <div className="border-b-[1.5px] border-black flex-1 pb-1 tracking-normal pl-2 font-sans text-black"> {new Date(quote.quote_date).toLocaleDateString()} </div>
              </div>
            </div>
 
@@ -188,13 +253,13 @@ export default function QuotePDFView() {
              </div>
              <div className="flex w-[40%] items-end gap-2 pl-4">
                <span className="shrink-0 tracking-widest">L.P.O. NO :</span>
-               <div className="border-b-[1.5px] border-black flex-1 pb-1 text-center tracking-normal font-sans text-black"> {quote.lpo_no} </div>
+               <div className="border-b-[1.5px] border-black flex-1 pb-1 tracking-normal pl-2 font-sans text-black"> {quote.lpo_no} </div>
              </div>
            </div>
 
            <div className="flex w-[55%] items-end gap-2">
              <span className="shrink-0 tracking-widest">LEAD TIME (APPROX) :</span>
-             <div className="border-b-[1.5px] border-black flex-1 pb-1 text-center tracking-normal font-sans text-black"> {quote.lead_time_approx} </div>
+             <div className="border-b-[1.5px] border-black flex-1 pb-1 tracking-normal pl-2 font-sans text-black"> {quote.lead_time_approx} </div>
            </div>
         </div>
 
@@ -256,8 +321,8 @@ export default function QuotePDFView() {
            {/* LEFT (COMPANY) SIGNATURE */}
            <div className="flex flex-col justify-end w-[45%]">
              {/* Image container firmly placed right above the span line */}
-             <div className="flex w-full pl-[95px] -mb-[8px] relative z-10 mix-blend-multiply">
-                 <div className="relative w-[130px] h-[50px]">
+             <div className="flex w-full pl-[40px] -mb-[15px] relative z-10 mix-blend-multiply">
+                 <div className="relative w-[200px] h-[80px]">
                     <Image src="/signature.png" alt="" layout="fill" objectFit="contain" priority unoptimized />
                  </div>
              </div>

@@ -63,8 +63,8 @@ export default function AvailabilityPage() {
           const data = await response.json();
           setSelectedSlots(data);
         }
-      } catch (error) {
-        console.error("Backend error:", error);
+      } catch {
+        // silently handle fetch errors
       } finally {
         setIsLoading(false);
       }

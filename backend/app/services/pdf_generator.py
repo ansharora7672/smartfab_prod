@@ -615,6 +615,196 @@ def generate_delivery_note_pdf(note_data: dict) -> bytes:
     return _run_playwright(html, note_no)
 
 
+def generate_quotation_download_pdf(quote: dict) -> bytes:
+    """
+    Pixel-exact replica of frontend /dashboard/quotes/[id]/pdf page.
+    Uses the same div-flex layout so the output is visually identical.
+    """
+    items = quote.get("items", [])
+    sr_col   = "".join(f'<div class="cell">{i.get("sr_no","")}</div>' for i in items)
+    desc_col = "".join(f'<div class="cell" style="text-align:left;padding-left:8px">{i.get("item_description","")}</div>' for i in items)
+    qty_col  = "".join(f'<div class="cell">{i.get("qty","")}</div>' for i in items)
+    price_col= "".join(f'<div class="cell">{float(i.get("u_price",0)):.2f}</div>' for i in items)
+    total_col= "".join(f'<div class="cell">{float(i.get("total_amount",0)):.2f}</div>' for i in items)
+
+    sig_tag  = f'<img src="{SIGNATURE_BASE64}" style="width:200px;height:80px;object-fit:contain;mix-blend-mode:multiply;margin-bottom:-15px;position:relative;z-index:10" />' if SIGNATURE_BASE64 else ""
+    logo_tag = f'<img src="{LOGO_BASE64}" style="width:180px;height:180px;object-fit:contain" />' if LOGO_BASE64 else ""
+    quote_date = str(quote.get("quote_date", ""))
+    lpo = quote.get("lpo_no") or ""
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page {{ size: A4; margin: 0; }}
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{
+    font-family: Helvetica, Arial, sans-serif;
+    background: #f3f4f6;
+    display: flex;
+    justify-content: center;
+    padding: 32px 0;
+  }}
+  .page {{
+    width: 210mm;
+    height: 297mm;
+    background: white;
+    padding: 6mm 10mm 10mm 10mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }}
+  /* ── Header ── */
+  .hdr {{ display:flex; width:100%; margin-bottom:8px; align-items:center; justify-content:space-between; }}
+  .logo-wrap {{ width:180px; height:180px; flex-shrink:0; margin-left:4px; transform:scale(1.25); transform-origin:left center; }}
+  .brand {{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-left:-8px; }}
+  .brand-name {{ color:#1E3A8A; font-weight:900; font-size:38px; letter-spacing:0.025em; line-height:1; margin-bottom:4px; }}
+  .brand-div {{ display:flex; align-items:center; justify-content:center; width:100%; margin-bottom:8px; margin-top:4px; }}
+  .brand-bar {{ height:2px; width:50px; background:#1E3A8A; }}
+  .brand-lathe {{ margin:0 12px; color:#1E3A8A; font-weight:900; font-size:18px; letter-spacing:0.2em; padding-top:2px; }}
+  .brand-tag {{ color:#1E3A8A; font-weight:800; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; white-space:nowrap; }}
+  .contacts {{ width:180px; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding-left:16px; font-size:10.5px; font-weight:600; color:#000; gap:8px; }}
+  .c-row {{ display:flex; align-items:center; gap:12px; }}
+  /* ── Separator ── */
+  .sep {{ width:100%; border-bottom:2.5px solid #000; margin-bottom:24px; }}
+  /* ── Title ── */
+  .title-row {{ display:flex; align-items:center; justify-content:center; width:100%; margin-bottom:24px; }}
+  .t-line {{ height:1.5px; width:50px; background:#000; }}
+  .t-text {{ margin:0 24px; color:#000; font-weight:900; font-size:22px; letter-spacing:0.2em; text-transform:uppercase; font-family:Helvetica,Arial,sans-serif; }}
+  /* ── Fields ── */
+  .fields {{ width:100%; display:flex; flex-direction:column; gap:26px; margin-bottom:40px; font-size:12px; font-weight:700; color:#000; text-transform:uppercase; padding:0 8px; letter-spacing:0.1em; }}
+  .f-row {{ display:flex; width:100%; align-items:flex-end; gap:8px; }}
+  .f-label {{ white-space:nowrap; letter-spacing:0.1em; }}
+  .f-val {{ border-bottom:1.5px solid #000; flex:1; padding-bottom:4px; padding-left:8px; letter-spacing:0; text-transform:none; font-weight:700; }}
+  .f-half {{ display:flex; flex:1; align-items:flex-end; gap:8px; }}
+  /* ── Table (div-flex, exact column widths from frontend) ── */
+  .tbl {{ width:100%; border:2px solid #000; flex:1; display:flex; flex-direction:column; margin-bottom:16px; font-size:13px; font-weight:900; text-align:center; color:#000; }}
+  .thead {{ display:flex; border-bottom:2px solid #000; height:56px; background:white; }}
+  .th {{ border-right:2px solid #000; display:flex; align-items:center; justify-content:center; padding:4px; font-size:13px; font-weight:900; }}
+  .th:last-child {{ border-right:none; }}
+  .tbody {{ display:flex; flex:1; }}
+  .tcol {{ display:flex; flex-direction:column; font-weight:700; border-right:2px solid #000; }}
+  .tcol:last-child {{ border-right:none; }}
+  .cell {{ padding:10px 4px; }}
+  /* column widths matching frontend exactly */
+  .w10 {{ width:10%; }} .w47 {{ width:47%; }} .w11 {{ width:11%; }} .w16 {{ width:16%; }}
+  /* ── Terms ── */
+  .terms {{ font-size:11px; font-weight:600; color:#000; line-height:1.4; margin-bottom:32px; padding:0 4px; }}
+  .terms-title {{ font-weight:700; text-decoration:underline; text-underline-offset:2px; margin-bottom:6px; }}
+  .terms-body {{ padding-left:16px; display:flex; flex-direction:column; gap:4px; text-align:justify; padding-right:16px; }}
+  /* ── Signature ── */
+  .sig-sec {{ display:flex; justify-content:space-between; padding:0 4px; padding-bottom:24px; margin-top:auto; }}
+  .sig-left {{ display:flex; flex-direction:column; justify-content:flex-end; width:45%; }}
+  .sig-label {{ white-space:nowrap; letter-spacing:0.1em; font-size:12px; font-weight:900; text-transform:uppercase; position:relative; z-index:10; }}
+  .sig-line {{ border-bottom:1.5px solid #000; flex:1; position:relative; z-index:10; }}
+  .sig-row {{ display:flex; align-items:flex-end; gap:8px; }}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="logo-wrap">{logo_tag}</div>
+    <div class="brand">
+      <div class="brand-name">SMARTFAB</div>
+      <div class="brand-div">
+        <div class="brand-bar"></div>
+        <span class="brand-lathe">LATHE</span>
+        <div class="brand-bar"></div>
+      </div>
+      <div class="brand-tag">Engineering Accuracy. Crafted in Metal</div>
+    </div>
+    <div class="contacts">
+      <div class="c-row"><svg viewBox="0 0 24 24" fill="#16A34A" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> +971 54 213 3637</div>
+      <div class="c-row"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> +971 55 361 0905</div>
+      <div class="c-row"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> lathe.smartfab@gmail.com</div>
+      <div class="c-row"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg> Ajman, Dubai</div>
+    </div>
+  </div>
+
+  <!-- SEPARATOR -->
+  <div class="sep"></div>
+
+  <!-- QUOTATION TITLE -->
+  <div class="title-row">
+    <div class="t-line"></div>
+    <span class="t-text">QUOTATION</span>
+    <div class="t-line"></div>
+  </div>
+
+  <!-- CLIENT FIELDS -->
+  <div class="fields">
+    <div class="f-row">
+      <span class="f-label">COMPANY :</span>
+      <div class="f-val">{quote.get("company_name","")}</div>
+    </div>
+    <div class="f-row">
+      <span class="f-label">ADDRESS :</span>
+      <div class="f-val">{quote.get("address","")}</div>
+    </div>
+    <div class="f-row">
+      <div class="f-half"><span class="f-label">PHONE NO :</span><div class="f-val">{quote.get("phone_no","")}</div></div>
+      <div style="width:48px"></div>
+      <div class="f-half"><span class="f-label">DATE :</span><div class="f-val">{quote_date}</div></div>
+    </div>
+    <div class="f-row">
+      <div class="f-half"><span class="f-label">ORDER NO :</span><div class="f-val">{quote.get("quote_no","")}</div></div>
+      <div style="width:48px"></div>
+      <div class="f-half"><span class="f-label">L.P.O. NO :</span><div class="f-val">{lpo}</div></div>
+    </div>
+    <div class="f-row" style="width:55%">
+      <span class="f-label">LEAD TIME (APPROX) :</span>
+      <div class="f-val">{quote.get("lead_time_approx","")}</div>
+    </div>
+  </div>
+
+  <!-- ITEMS TABLE (div-flex, matching frontend column widths) -->
+  <div class="tbl">
+    <div class="thead">
+      <div class="th w10">SR.NO</div>
+      <div class="th w47">ITEM DESCRIPTION</div>
+      <div class="th w11">QTY</div>
+      <div class="th w16">U PRICE</div>
+      <div class="th w16" style="flex-direction:column;line-height:1.3">TOTAL<br/>AMOUNT</div>
+    </div>
+    <div class="tbody">
+      <div class="tcol w10">{sr_col}</div>
+      <div class="tcol w47">{desc_col}</div>
+      <div class="tcol w11">{qty_col}</div>
+      <div class="tcol w16">{price_col}</div>
+      <div class="tcol w16">{total_col}</div>
+    </div>
+  </div>
+
+  <!-- TERMS -->
+  <div class="terms">
+    <div class="terms-title">Terms &amp; Conditions</div>
+    <div class="terms-body">
+      <p>1. Payment Terms - 50% advance will be payable along with the LPO, and 50% on Completion after the works.</p>
+      <p>2. Manufacturing &amp; Fabrication - Manufacturing and fabrication activities will commence only after receipt of order confirmation and initial advance payment. Any materials to be supplied by the customer must be provided prior to the start of production. We hope the above is in line with your requirement, and we look forward to receiving your valued orders.</p>
+    </div>
+    <p style="margin-top:32px;font-weight:700">If you require any further clarification/assistance, don't hesitate to contact us.<br/>Thanks,</p>
+    <p style="margin-top:14px;font-weight:900;font-size:14px">SmartFab Lathe</p>
+  </div>
+
+  <!-- SIGNATURE -->
+  <div class="sig-sec">
+    <div class="sig-left">
+      {sig_tag}
+      <div class="sig-row">
+        <span class="sig-label">SIGNATURE :</span>
+        <div class="sig-line"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body></html>"""
+
+    return _run_playwright(html, quote.get("quote_no", "quotation"))
+
+
 def generate_invoice_pdf(invoice_data: dict, ticket_data: dict) -> bytes:
     invoice_no = invoice_data.get("display_invoice_no") or invoice_data.get("invoice_no", "")
     dated = invoice_data.get("dated", "")
