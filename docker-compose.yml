@@ -19,16 +19,15 @@ services:
   # ── FastAPI backend ────────────────────────────────────────────────────────
   backend:
     build:
-      context: .                    # project root (so Dockerfile can reach both backend/ and frontend/)
+      context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     env_file:
-      - ./backend/.env              # fill this from backend/.env.example before deploying
+      - ./backend/.env
     volumes:
-      # PDF generator reads logo/signature images from frontend/public at runtime
       - ./frontend/public:/app/frontend/public:ro
 
   # ── Next.js frontend ───────────────────────────────────────────────────────
@@ -37,11 +36,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Must equal the public URL of your server (same as FRONTEND_URL in backend/.env)
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     restart: unless-stopped
     depends_on:
       - backend
+    volumes:
+      - ./frontend/public:/app/public:ro
 
   # ── Nginx reverse proxy ────────────────────────────────────────────────────
   nginx:
@@ -52,7 +52,6 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # SSL certificates from certbot (installed on the EC2 host, not in Docker)
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
