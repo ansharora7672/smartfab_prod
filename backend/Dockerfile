@@ -1,21 +1,23 @@
-FROM python:3.12-slim
+FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
 
 WORKDIR /app
 
-# System deps needed by Playwright (headless Chromium) and PDF libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    libcairo2-dev \
+    libffi-dev \
+    pkg-config \
     libpq-dev \
+    gcc \
+    python3-dev \
+    python3.12-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first (layer-caches unless requirements change)
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright's Chromium browser and its OS dependencies
-RUN playwright install chromium --with-deps
-
-# Copy application source
 COPY backend/app ./app
 
 EXPOSE 8000
