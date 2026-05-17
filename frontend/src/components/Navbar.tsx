@@ -41,13 +41,13 @@ export default function Navbar() {
             height={100}
             className="object-contain"
           />
-          <div className="flex flex-col items-start leading-none">
+          <div className="flex flex-col items-center leading-none">
             <span className="font-heading font-bold text-base tracking-[0.2em] text-white">
               SMARTFAB
             </span>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="block w-4 h-px bg-white/40" />
-              <span className="font-heading font-semibold text-[10px] tracking-[0.3em] text-white/60">
+              <span className="font-heading font-semibold text-[10px] tracking-[0.3em] text-white">
                 LATHE
               </span>
               <span className="block w-4 h-px bg-white/40" />

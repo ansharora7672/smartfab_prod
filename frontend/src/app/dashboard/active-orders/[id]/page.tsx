@@ -195,6 +195,7 @@ export default function ActiveOrderDetailPage() {
 
   const updateOrderStatus = async (newStatus: string) => {
     if (!newStatus) return;
+    setOrderStatusValue("");
     setUpdatingItem("ORDER");
     try {
       const res = await fetch(`${API}/admin/orders/tickets/${order?.ticket.id}/production-status`, {
@@ -203,9 +204,11 @@ export default function ActiveOrderDetailPage() {
         credentials: "include",
         body: JSON.stringify({ production_status: newStatus }),
       });
-      if (!res.ok) throw new Error("Failed to update order status");
-      showFeedback("success", "All items updated to new status.");
-      setOrderStatusValue("");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update order stage");
+      }
+      showFeedback("success", "Order stage updated.");
       load();
     } catch (err: any) {
       showFeedback("error", err.message);
@@ -273,7 +276,7 @@ export default function ActiveOrderDetailPage() {
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-b border-border bg-section-bg/20 flex-wrap">
           {/* Set overall order status */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-muted uppercase tracking-widest whitespace-nowrap">Set All Items:</span>
+            <span className="text-[11px] font-bold text-muted uppercase tracking-widest whitespace-nowrap">Order Stage:</span>
             <select
               value={orderStatusValue}
               disabled={updatingItem === "ORDER"}
@@ -303,22 +306,15 @@ export default function ActiveOrderDetailPage() {
             </button>
             {(() => {
               const allItemsDone = o.quote.items.every((item: any) => item.production_status === "COMPLETED");
-              const invoiceReady = o.invoice && (o.invoice.status === "SENT" || o.invoice.status === "PAID");
-              const canComplete = allItemsDone && invoiceReady;
               return (
                 <button
-                  onClick={() => canComplete && setConfirmComplete(true)}
-                  disabled={!canComplete}
-                  title={
-                    !canComplete
-                      ? [
-                          !allItemsDone ? `${o.quote.items.filter((i: any) => i.production_status !== "COMPLETED").length} item(s) not at COMPLETED status` : "",
-                          !invoiceReady ? (!o.invoice ? "No invoice generated" : `Invoice is ${o.invoice.status} — must be SENT or PAID`) : "",
-                        ].filter(Boolean).join(" · ")
-                      : undefined
-                  }
+                  onClick={() => allItemsDone && setConfirmComplete(true)}
+                  disabled={!allItemsDone}
+                  title={!allItemsDone
+                    ? `${o.quote.items.filter((i: any) => i.production_status !== "COMPLETED").length} item(s) not yet at COMPLETED status`
+                    : undefined}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    canComplete
+                    allItemsDone
                       ? "bg-white border border-green-300 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600"
                       : "bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed"
                   }`}
@@ -334,24 +330,14 @@ export default function ActiveOrderDetailPage() {
         {/* Completion readiness checklist — visible when not yet ready */}
         {(() => {
           const allItemsDone = o.quote.items.every((item: any) => item.production_status === "COMPLETED");
-          const invoiceReady = o.invoice && (o.invoice.status === "SENT" || o.invoice.status === "PAID");
-          if (allItemsDone && invoiceReady) return null;
+          if (allItemsDone) return null;
+          const remaining = o.quote.items.filter((i: any) => i.production_status !== "COMPLETED").length;
           return (
-            <div className="px-6 py-3 border-b border-amber-100 bg-amber-50/60 flex flex-wrap gap-4">
-              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest self-center">Before completing:</span>
-              <span className={`flex items-center gap-1.5 text-xs font-medium ${allItemsDone ? "text-green-700" : "text-amber-700"}`}>
-                {allItemsDone ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                {allItemsDone
-                  ? "All items completed"
-                  : `${o.quote.items.filter((i: any) => i.production_status !== "COMPLETED").length} item(s) not yet completed`}
-              </span>
-              <span className={`flex items-center gap-1.5 text-xs font-medium ${invoiceReady ? "text-green-700" : "text-amber-700"}`}>
-                {invoiceReady ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                {invoiceReady
-                  ? "Invoice sent"
-                  : !o.invoice
-                  ? "Invoice not generated yet"
-                  : `Invoice is ${o.invoice.status} — must be SENT or PAID`}
+            <div className="px-6 py-3 border-b border-amber-100 bg-amber-50/60 flex flex-wrap gap-4 items-center">
+              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest">Before completing:</span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                <XCircle className="w-3.5 h-3.5" />
+                {remaining} item{remaining !== 1 ? "s" : ""} not yet at COMPLETED status
               </span>
             </div>
           );

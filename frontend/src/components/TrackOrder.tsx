@@ -1,20 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Package, CheckCircle, Clock, AlertCircle, ChevronRight } from "lucide-react";
+import { Search, Package, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const TICKET_STAGES = [
-  "Consultation Scheduled",
-  "Quote Being Prepared",
-  "In Production",
-  "Order Completed",
-];
-
 const PRODUCTION_STAGES = [
   { key: "ORDER_RECEIVED",     label: "Order Received" },
-  { key: "VENDOR_ASSIGNED",    label: "Vendor Assigned" },
   { key: "IN_PRODUCTION",      label: "In Production" },
   { key: "QUALITY_CHECK",      label: "Quality Check" },
   { key: "READY_FOR_DELIVERY", label: "Ready for Delivery" },
@@ -45,49 +37,19 @@ type OrderResult = {
   items: OrderItem[];
 };
 
-// ── 4-step ticket-level timeline ──────────────────────────────────────────────
-function TicketTimeline({ statusLabel }: { statusLabel: string }) {
-  const currentIdx = TICKET_STAGES.indexOf(statusLabel);
-  // When "Order Completed" is the current step it IS done — treat it as filled.
-  const isFullyComplete = statusLabel === "Order Completed";
+// ── 6-step production pipeline ────────────────────────────────────────────────
+// VENDOR_ASSIGNED is internal — normalize to IN_PRODUCTION for customers
+// When order is CLOSED, always show COMPLETED regardless of item statuses
+function ProductionPipeline({ currentStatus, isClosed }: { currentStatus: string; isClosed: boolean }) {
+  const normalized = isClosed
+    ? "COMPLETED"
+    : currentStatus === "VENDOR_ASSIGNED"
+    ? "IN_PRODUCTION"
+    : currentStatus;
 
-  return (
-    <div className="flex items-start w-full mb-8">
-      {TICKET_STAGES.map((step, idx) => {
-        const done   = idx < currentIdx || (isFullyComplete && idx === currentIdx);
-        const active = !done && idx === currentIdx;
-        const last   = idx === TICKET_STAGES.length - 1;
-        return (
-          <div key={step} className="flex items-center flex-1 min-w-0">
-            <div className="flex flex-col items-center shrink-0">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                done   ? "bg-primary-500 border-primary-500" :
-                active ? "bg-transparent border-primary-400 ring-2 ring-primary-400/20" :
-                         "bg-transparent border-white/20"
-              }`}>
-                {done   ? <CheckCircle className="w-4 h-4 text-white" /> :
-                 active ? <div className="w-2.5 h-2.5 rounded-full bg-primary-400" /> :
-                          <div className="w-2.5 h-2.5 rounded-full bg-white/20" />}
-              </div>
-              <span className={`text-[10px] mt-1.5 text-center leading-tight max-w-20 font-semibold ${
-                done || active ? "text-white" : "text-white/30"
-              }`}>{step}</span>
-            </div>
-            {!last && (
-              <div className={`flex-1 h-0.5 mx-1 -mt-5 transition-all ${
-                done ? "bg-primary-500" : "bg-white/15"
-              }`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+  const currentIdx = PRODUCTION_STAGES.findIndex(s => s.key === normalized);
+  const isFullyComplete = normalized === "COMPLETED";
 
-// ── 7-step production pipeline ────────────────────────────────────────────────
-function ProductionPipeline({ currentStatus }: { currentStatus: string }) {
-  const currentIdx = PRODUCTION_STAGES.findIndex(s => s.key === currentStatus);
   return (
     <div className="mb-7 bg-white/4 border border-white/8 rounded-2xl p-5">
       <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">
@@ -95,28 +57,30 @@ function ProductionPipeline({ currentStatus }: { currentStatus: string }) {
       </p>
       <div className="flex items-start w-full overflow-x-auto pb-1">
         {PRODUCTION_STAGES.map((stage, idx) => {
-          const done   = idx < currentIdx;
-          const active = idx === currentIdx;
+          const done   = idx < currentIdx || (isFullyComplete && idx === currentIdx);
+          const active = !done && idx === currentIdx;
           const last   = idx === PRODUCTION_STAGES.length - 1;
           return (
             <div key={stage.key} className="flex items-center flex-1 min-w-0">
               <div className="flex flex-col items-center shrink-0">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all ${
-                  done   ? "bg-primary-500 border-primary-500" :
-                  active ? "bg-transparent border-primary-400 ring-2 ring-primary-400/20" :
-                           "bg-transparent border-white/15"
+                  done   ? "bg-emerald-500 border-emerald-500" :
+                  active ? "bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/25" :
+                           "bg-transparent border-white/20"
                 }`}>
-                  {done   ? <CheckCircle className="w-3 h-3 text-white" /> :
-                   active ? <div className="w-2 h-2 rounded-full bg-primary-400" /> :
-                            <div className="w-2 h-2 rounded-full bg-white/15" />}
+                  {done   ? <CheckCircle className="w-3.5 h-3.5 text-white" /> :
+                   active ? <div className="w-2 h-2 rounded-full bg-emerald-400" /> :
+                            <div className="w-2 h-2 rounded-full bg-white/20" />}
                 </div>
                 <span className={`text-[9px] mt-1.5 text-center leading-tight max-w-14 font-medium ${
-                  done || active ? "text-white" : "text-white/30"
+                  done   ? "text-white/60" :
+                  active ? "text-emerald-300 font-semibold" :
+                           "text-white/40"
                 }`}>{stage.label}</span>
               </div>
               {!last && (
                 <div className={`flex-1 h-0.5 mx-0.5 -mt-5 transition-all ${
-                  done ? "bg-primary-500" : "bg-white/10"
+                  done ? "bg-emerald-500" : "bg-white/10"
                 }`} />
               )}
             </div>
@@ -128,30 +92,27 @@ function ProductionPipeline({ currentStatus }: { currentStatus: string }) {
 }
 
 // ── Single item row ───────────────────────────────────────────────────────────
+// VENDOR_ASSIGNED is internal — show "In Production" to customers
 function ItemCard({ item }: { item: OrderItem }) {
-  const pct = Math.round((item.progress_step / item.total_steps) * 100);
+  const displayLabel = item.production_status_label === "Vendor Assigned"
+    ? "In Production"
+    : item.production_status_label;
+  const isDone = item.production_status_label === "Completed";
   return (
-    <div className="bg-white/6 border border-white/12 rounded-xl px-4 py-4">
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate">
-            {item.sr_no}. {item.description}
-          </p>
-          <p className="text-xs text-white/55 mt-0.5 font-medium">Qty: {item.qty}</p>
-        </div>
-        <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-primary-500/25 text-white border-primary-400/40 whitespace-nowrap shrink-0">
-          {item.production_status_label}
-        </span>
+    <div className="bg-white/6 border border-white/12 rounded-xl px-4 py-3.5 flex items-center justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-white leading-snug">
+          {item.sr_no}. {item.description}
+        </p>
+        <p className="text-xs text-white/50 mt-0.5">Qty: {item.qty}</p>
       </div>
-      <div className="flex items-center gap-2.5">
-        <div className="flex-1 bg-white/15 rounded-full h-1.5">
-          <div
-            className="bg-primary-400 h-1.5 rounded-full transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <span className="text-[10px] text-white/60 font-semibold shrink-0 w-7 text-right">{pct}%</span>
-      </div>
+      <span className={`text-[11px] font-bold px-3 py-1 rounded-full border whitespace-nowrap shrink-0 ${
+        isDone
+          ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+          : "bg-white/10 text-white/80 border-white/20"
+      }`}>
+        {displayLabel}
+      </span>
     </div>
   );
 }
@@ -243,15 +204,15 @@ export default function TrackOrder() {
             <div className="flex items-start justify-between gap-4 mb-6 pb-5 border-b border-white/8">
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <Package className="w-3.5 h-3.5 text-primary-400" />
-                  <span className="text-xs font-bold text-primary-400 uppercase tracking-widest">
+                  <Package className="w-3.5 h-3.5 text-white/50" />
+                  <span className="text-xs font-bold text-white/60 uppercase tracking-widest">
                     {result.ticket_id}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-white">{result.company_name}</h3>
-                <p className="text-sm text-white/70 mt-0.5 font-medium">{result.customer_name}</p>
+                <p className="text-sm text-white/60 mt-0.5 font-medium">{result.customer_name}</p>
                 {result.lpo_number && (
-                  <p className="text-xs text-white/50 mt-1 font-mono">LPO: {result.lpo_number}</p>
+                  <p className="text-xs text-white/40 mt-1 font-mono">LPO: {result.lpo_number}</p>
                 )}
               </div>
               <span className={`text-xs font-bold px-3 py-1.5 rounded-full border whitespace-nowrap shrink-0 ${
@@ -265,19 +226,19 @@ export default function TrackOrder() {
               </span>
             </div>
 
-            {/* 4-step ticket timeline */}
-            <TicketTimeline statusLabel={result.status_label} />
-
-            {/* 7-step production pipeline — shown when order is active/closed */}
-            {result.overall_production_status && (
-              <ProductionPipeline currentStatus={result.overall_production_status} />
+            {/* Production pipeline */}
+            {(result.overall_production_status || result.status === "CLOSED") && (
+              <ProductionPipeline
+                currentStatus={result.overall_production_status ?? "ORDER_RECEIVED"}
+                isClosed={result.status === "CLOSED"}
+              />
             )}
 
             {/* Per-item breakdown */}
             {result.items.length > 0 && (
               <div>
                 <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-3">
-                  Items — {result.items.length} line item{result.items.length !== 1 ? "s" : ""}
+                  Items
                 </p>
                 <div className="space-y-2.5">
                   {result.items.map(item => (
@@ -287,10 +248,10 @@ export default function TrackOrder() {
               </div>
             )}
 
-            {/* Pre-production */}
+            {/* Pre-production — no items yet */}
             {result.items.length === 0 && result.status !== "CLOSED" && (
               <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-400">
-                <Clock className="w-4 h-4 shrink-0" />
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>Your order is being processed. Item tracking will be available once production begins.</span>
               </div>
             )}

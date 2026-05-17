@@ -100,7 +100,7 @@ export default function DeliveryNotePDFPage() {
         {/* HEADER */}
         <div className="flex w-full mb-2 relative z-20 items-center justify-between">
           <div className="w-[180px] h-[180px] shrink-0 relative ml-1 scale-[1.25]">
-            <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
+            <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" fill className="object-contain" priority />
           </div>
           <div className="flex-1 flex flex-col items-center justify-center -ml-2">
             <h1 className="text-[#1E3A8A] font-black text-[38px] tracking-wide mb-1 leading-none">SMARTFAB</h1>
@@ -166,40 +166,33 @@ export default function DeliveryNotePDFPage() {
         </div>
 
         {/* ITEMS TABLE */}
-        <table className="w-full border-2 border-black flex-1 mb-4 bg-white text-[13px] font-black text-center text-black font-sans border-collapse">
-          <colgroup>
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "57%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "22%" }} />
-          </colgroup>
-          <thead>
-            <tr className="border-b-2 border-black uppercase h-12">
-              <th className="border-r-2 border-black text-[11px] font-black">SR.NO</th>
-              <th className="border-r-2 border-black text-[11px] font-black">ITEM DESCRIPTION</th>
-              <th className="border-r-2 border-black text-[11px] font-black">QTY</th>
-              <th className="text-[11px] font-black">REMARK</th>
-            </tr>
-          </thead>
-          <tbody>
-            {note.items.map((item: any, i: number) => (
-              <tr key={i} className="border-b border-black/30">
-                <td className="border-r-2 border-black py-2.5 text-center">{item.sr_no}</td>
-                <td className="border-r-2 border-black py-2.5 text-left pl-4 font-bold tracking-tight">{item.item_description}</td>
-                <td className="border-r-2 border-black py-2.5 text-center">{item.qty}</td>
-                <td className="py-2.5 text-left pl-3">{item.remark}</td>
-              </tr>
-            ))}
-            {Array.from({ length: blankRows }).map((_, i) => (
-              <tr key={`b-${i}`} className="border-b border-black/30" style={{ height: "36px" }}>
-                <td className="border-r-2 border-black">&nbsp;</td>
-                <td className="border-r-2 border-black"></td>
-                <td className="border-r-2 border-black"></td>
-                <td></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="w-full border-2 border-black flex-1 mb-4 bg-white text-[13px] font-black text-center text-black font-sans flex flex-col">
+          {/* Header */}
+          <div className="flex border-b-2 border-black w-full uppercase shrink-0" style={{ height: "40px" }}>
+            <div className="w-[10%] border-r-2 border-black flex items-center justify-center text-[11px]">SR.NO</div>
+            <div className="w-[57%] border-r-2 border-black flex items-center justify-center text-[11px]">ITEM DESCRIPTION</div>
+            <div className="w-[11%] border-r-2 border-black flex items-center justify-center text-[11px]">QTY</div>
+            <div className="w-[22%] flex items-center justify-center text-[11px]">REMARK</div>
+          </div>
+          {/* Data rows — compact, never expand */}
+          {note.items.map((item: any, i: number) => (
+            <div key={i} className="flex border-b border-black/30 shrink-0" style={{ minHeight: "32px" }}>
+              <div className="w-[10%] border-r-2 border-black flex items-center justify-center py-1">{item.sr_no}</div>
+              <div className="w-[57%] border-r-2 border-black flex items-start py-1 pl-4 font-bold tracking-tight text-left">{item.item_description}</div>
+              <div className="w-[11%] border-r-2 border-black flex items-center justify-center py-1">{item.qty}</div>
+              <div className="w-[22%] flex items-center py-1 pl-3 text-left">{item.remark}</div>
+            </div>
+          ))}
+          {/* Blank rows — share remaining vertical space equally */}
+          {Array.from({ length: blankRows }).map((_, i) => (
+            <div key={`b-${i}`} className={`flex flex-1 ${i < blankRows - 1 ? "border-b border-black/30" : ""}`}>
+              <div className="w-[10%] border-r-2 border-black" />
+              <div className="w-[57%] border-r-2 border-black" />
+              <div className="w-[11%] border-r-2 border-black" />
+              <div className="w-[22%]" />
+            </div>
+          ))}
+        </div>
 
         {/* SIGNATURE BLOCK */}
         <div className="w-full border border-black p-4 mt-auto">
@@ -208,7 +201,7 @@ export default function DeliveryNotePDFPage() {
             <div className="flex flex-col justify-end w-[45%]">
               <div className="flex w-full pl-[60px] -mb-[8px] relative z-10 mix-blend-multiply">
                 <div className="relative w-[130px] h-[50px]">
-                  <Image src="/signature.png" alt="" layout="fill" objectFit="contain" priority unoptimized />
+                  <Image src="/signature.png" alt="" fill className="object-contain" priority unoptimized />
                 </div>
               </div>
               <div className="flex items-end gap-2 relative z-0">

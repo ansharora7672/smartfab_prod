@@ -84,10 +84,18 @@ async def track_order(
             items_result = await db.execute(items_stmt)
             items = items_result.scalars().all()
 
-            overall = _overall_production_status(items)
-            response["overall_production_status"] = overall.value
-            response["overall_production_status_label"] = PRODUCTION_STATUS_LABELS.get(overall, overall.value)
-            response["overall_production_step"] = PRODUCTION_STATUS_ORDER.index(overall)
+            # Use the ticket-level stage if the admin has explicitly set it;
+            # fall back to computing from items for orders created before this field existed.
+            # order_production_status is stored as plain VARCHAR (str), not an enum instance.
+            if quote.order_production_status:
+                overall_str = quote.order_production_status
+                overall_enum = ProductionStatusEnum(overall_str)
+            else:
+                overall_enum = _overall_production_status(items)
+                overall_str = overall_enum.value
+            response["overall_production_status"] = overall_str
+            response["overall_production_status_label"] = PRODUCTION_STATUS_LABELS.get(overall_enum, overall_str)
+            response["overall_production_step"] = PRODUCTION_STATUS_ORDER.index(overall_enum)
 
             response["items"] = [
                 {

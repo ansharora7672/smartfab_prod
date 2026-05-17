@@ -185,20 +185,20 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const sidebarContent = (
     <>
       {/* Branding */}
-      <div className="p-6 border-b border-white/10">
+      <div className="p-6 border-b border-border bg-section-bg shadow-sm">
         <div className="flex items-center gap-3">
           <Image
             src="/images/smartfab_white_logo.png"
             alt="SmartFab Lathe"
-            width={40}
-            height={40}
-            className="shrink-0 object-contain rounded-xl"
+            width={48}
+            height={48}
+            className="shrink-0 object-contain drop-shadow-sm"
           />
           <div className="flex flex-col">
-            <span className="text-sm font-bold tracking-wider text-white font-heading">
+            <span className="text-[15px] font-extrabold tracking-wider text-primary-900 font-heading uppercase">
               SMARTFAB LATHE
             </span>
-            <span className="text-[10px] text-white/40 font-medium tracking-wider">
+            <span className="text-[10px] text-muted font-bold tracking-wider">
               {user.role === "ADMIN" ? "Admin Console" : "Staff Console"}
             </span>
           </div>
@@ -278,16 +278,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           }`}
         >
           Completed Orders
-        </Link>
-        <Link
-          href="/dashboard/vendors"
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-300 ${
-            pathname.startsWith("/dashboard/vendors")
-              ? "text-white bg-white/10"
-              : "text-white/70 hover:text-white hover:bg-white/10"
-          }`}
-        >
-          Vendors
         </Link>
         <Link
           href="/dashboard/drivers"

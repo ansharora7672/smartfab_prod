@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Package, Search, LayoutGrid, List, Building2, Receipt, SearchX } from "lucide-react";
+import { ChevronRight, Package, Search, LayoutGrid, List, Building2, Receipt, SearchX, User, Mail } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -135,7 +135,17 @@ export default function ActiveOrdersPage() {
                       {statusLabel(status)}
                     </span>
                   </div>
-                  <h3 className="text-base font-bold text-text-primary tracking-tight line-clamp-1">{o.ticket.company_name}</h3>
+                  <div className="flex flex-col gap-1.5 mt-3">
+                    <span className="font-semibold text-sm text-text-primary flex items-center gap-2">
+                      <User className="w-3.5 h-3.5 text-primary-600" /> {o.ticket.customer_name}
+                    </span>
+                    <span className="text-xs font-semibold text-text-secondary flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-muted" /> {o.ticket.company_name}
+                    </span>
+                    <span className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                      <Mail className="w-3 h-3" /> {o.ticket.email}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Details */}
@@ -197,7 +207,7 @@ export default function ActiveOrdersPage() {
               <thead>
                 <tr className="border-b border-border bg-section-bg/30">
                   <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Order ID</th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Company</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Client & Company</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Quote</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Items</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-muted uppercase tracking-widest">Status</th>
@@ -220,7 +230,19 @@ export default function ActiveOrdersPage() {
                           {o.ticket.ticket_id}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-text-primary">{o.ticket.company_name}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-semibold text-sm text-text-primary flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-primary-600" /> {o.ticket.customer_name}
+                          </span>
+                          <span className="text-xs font-semibold text-text-secondary flex items-center gap-2">
+                            <Building2 className="w-3.5 h-3.5 text-muted" /> {o.ticket.company_name}
+                          </span>
+                          <span className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                            <Mail className="w-3 h-3" /> {o.ticket.email}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 font-mono text-xs text-muted">{o.quote.quote_no}</td>
                       <td className="px-6 py-4">
                         <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary bg-section-bg w-fit px-2 py-1 rounded-md border border-border">

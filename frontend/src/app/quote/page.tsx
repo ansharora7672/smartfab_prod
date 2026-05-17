@@ -91,12 +91,12 @@ export default function QuotePage() {
       <header className="h-[80px] shrink-0 bg-white border-b border-border px-6 md:px-10 flex items-center justify-between z-50">
         <Link href="/" className="flex items-center gap-4">
           <Image src="/SmartFab_FinalLogo.png" alt="SmartFab" width={72} height={72} className="object-contain" />
-          <div className="flex flex-col items-start leading-none">
+          <div className="flex flex-col items-center leading-none">
             <span className="font-heading font-bold text-lg tracking-[0.2em] text-primary-900">SMARTFAB</span>
             <div className="flex items-center gap-2 mt-1">
-              <span className="block w-4 h-px bg-primary-600" />
-              <span className="font-heading font-semibold text-[10px] tracking-[0.3em] text-primary-600">LATHE</span>
-              <span className="block w-4 h-px bg-primary-600" />
+              <span className="block w-4 h-px bg-primary-900/40" />
+              <span className="font-heading font-semibold text-[10px] tracking-[0.3em] text-primary-900">LATHE</span>
+              <span className="block w-4 h-px bg-primary-900/40" />
             </div>
           </div>
         </Link>

@@ -400,9 +400,10 @@ async def get_ticket_by_id(id: str, db: AsyncSession = Depends(get_session), cur
 async def get_available_slots(db: AsyncSession = Depends(get_session)):
     from app.models.availability import StaffAvailability
     
-    # Ensure availability filtering strictly adheres to UTC
-    today = dt.datetime.now(dt.timezone.utc).date()
-    now_time = dt.datetime.now(dt.timezone.utc).time() 
+    # Use local date/time (naive) to match how slot times are stored in the DB.
+    # Using UTC here would cause slots to be incorrectly filtered out in UTC+ timezones.
+    today = dt.date.today()
+    now_time = dt.datetime.now().time()
     end_date = today + dt.timedelta(days=14)
     
     # 1. Total Company Capacity (Count all Staff working per 30-min slot)

@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from app.config import settings
 
 # ============================================================
@@ -51,6 +52,11 @@ async def init_db():
     """
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        # ADD COLUMN IF NOT EXISTS for columns added after the table was created.
+        # Safe to run every startup — IF NOT EXISTS makes it a no-op if the column exists.
+        await conn.execute(text(
+            "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS order_production_status VARCHAR"
+        ))
 
 
 async def bootstrap_admin():

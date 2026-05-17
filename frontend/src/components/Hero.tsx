@@ -29,7 +29,7 @@ export default function Hero() {
         <div className="inline-flex items-center gap-3 mb-8">
           <span className="block w-8 h-px bg-white/20" />
           <span className="text-[11px] font-semibold tracking-[0.3em] uppercase text-white/40">
-            Precision Manufacturing · UAE
+            Precision Manufacturing
           </span>
           <span className="block w-8 h-px bg-white/20" />
         </div>

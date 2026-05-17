@@ -200,7 +200,12 @@ export function BookingCalendar({
             <div className="pr-3 grid grid-cols-2 gap-3 custom-scrollbar content-start md:flex-1 md:overflow-y-auto">
                 {timeSlots.map((slot: any, idx: number) => {
                   const isSelected = selectedTimeBackend === slot.backend;
-                  const localDateStr = new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
+                  // Build date string from LOCAL date parts to avoid UTC midnight shift
+                  // (subtracting timezoneOffset on a midnight-local Date shifts it to yesterday in UTC+)
+                  const y = selectedDate.getFullYear();
+                  const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                  const d = String(selectedDate.getDate()).padStart(2, '0');
+                  const localDateStr = `${y}-${m}-${d}`;
                   const isAvailable = availableSlots[localDateStr]?.includes(slot.backend);
 
                   const isToday = selectedDate.toDateString() === new Date().toDateString();

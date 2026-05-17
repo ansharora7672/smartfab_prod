@@ -1,24 +1,18 @@
-// Import the type that defines what SEO metadata looks like
 import type { Metadata } from "next";
-// Import Google Fonts — Next.js downloads these at build time (faster than loading from Google)
 import { Plus_Jakarta_Sans, Inter, Geist } from "next/font/google";
-// Import our global CSS (Tailwind + custom colors)
+import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
-
-// Set up heading font — Plus Jakarta Sans
-// "variable" creates a CSS variable we can use in Tailwind classes
 const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],               // Only load English characters (smaller file)
-  variable: "--font-plus-jakarta",  // Creates CSS variable: var(--font-plus-jakarta)
-  display: "swap",                  // Show fallback font while this loads
-  weight: ["400", "500", "600", "700"], // Which weights to download
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 
-// Set up body font — Inter
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -26,53 +20,113 @@ const inter = Inter({
   weight: ["400", "500", "600"],
 });
 
-// SEO METADATA — Next.js converts this into <title> and <meta> tags automatically
-// This is what Google reads when it crawls the site
+const SITE_URL = "https://smartfablathe.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "SmartFab Lathe",
-    // "template" lets other pages set their own title
-    // e.g., a page sets title = "About" → becomes "About | SmartFab Lathe"
+    default: "SmartFab Lathe | CNC Precision Manufacturing Dubai",
     template: "%s | SmartFab Lathe",
   },
   description:
-    "SmartFab Lathe offers CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai. Engineering Accuracy. Crafted in metal. Get a quote today.",
+    "SmartFab Lathe offers CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai & UAE. Engineering Accuracy. Crafted in metal. Get a quote today.",
   keywords: [
     "CNC milling Dubai",
-    "manufacturing services Dubai",
-    "laser cutting UAE",
-    "precision manufacturing",
+    "CNC turning UAE",
+    "laser cutting Dubai",
+    "precision manufacturing UAE",
+    "welding services Dubai",
     "SmartFab Lathe",
+    "metal fabrication Ajman",
+    "industrial manufacturing UAE",
   ],
-  // OpenGraph = what shows when someone shares your link on WhatsApp, LinkedIn, etc.
+  authors: [{ name: "SmartFab Lathe", url: SITE_URL }],
+  creator: "SmartFab Lathe",
+  publisher: "SmartFab Lathe",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
   openGraph: {
-    title: "SmartFab Lathe | Engineering Accuracy. Crafted in metal",
+    title: "SmartFab Lathe | Engineering Accuracy. Crafted in Metal.",
     description:
-      "SmartFab Lathe offers CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai. Engineering Accuracy. Crafted in metal. Get a quote today.",
+      "CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai & UAE. Get a quote today.",
     type: "website",
-    locale: "en_AE",    // English - UAE
+    locale: "en_AE",
+    url: SITE_URL,
+    siteName: "SmartFab Lathe",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "SmartFab Lathe — Precision Manufacturing Dubai",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SmartFab Lathe | Engineering Accuracy. Crafted in Metal.",
+    description:
+      "CNC milling, turning, laser cutting, welding, and precision manufacturing services in Dubai & UAE.",
+    images: ["/og-image.png"],
   },
 };
 
-// THE ACTUAL COMPONENT
-// "children" = whatever page the user is currently viewing (home, about, etc.)
-// This function wraps every page with the same <html> and <body> structure
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;  // TypeScript: "children can be any React content"
+  children: React.ReactNode;
 }>) {
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+
   return (
-    // We attach both font variables to <html> so all pages can use them
-    <html lang="en" className={cn(plusJakartaSans.variable, inter.variable, "font-sans", geist.variable)}>
-      {/* 
-        font-inter = use Inter as default body font
-        antialiased = makes text smoother on screens
-        bg-white = white background
-        text-slate-900 = very dark gray text (not pure black — easier on the eyes)
-      */}
+    <html
+      lang="en"
+      className={cn(
+        plusJakartaSans.variable,
+        inter.variable,
+        "font-sans",
+        geist.variable
+      )}
+    >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="font-inter antialiased bg-white text-slate-900">
         {children}
+
+        {gaMeasurementId && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}', { page_path: window.location.pathname });
+              `}
+            </Script>
+          </>
+        )}
       </body>
     </html>
   );

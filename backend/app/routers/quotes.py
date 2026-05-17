@@ -211,6 +211,7 @@ async def get_single_quote(
 @quotes_router.post("/{quote_id}/send")
 async def send_quote_to_client(
     quote_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -259,8 +260,45 @@ async def send_quote_to_client(
         "phone_number": ticket.phone_number,
     }
     
-    # Execute email synchronously to ensure it actually works
-    email_success = send_quote_email(ticket.email, quote_data, ticket_data)
+    # Render the exact same frontend PDF page that the download button uses
+    access_token = request.cookies.get("access_token", "")
+    frontend_url = f"{settings.FRONTEND_URL}/dashboard/quotes/{quote_id}/pdf"
+
+    def _render_pdf() -> bytes:
+        from playwright.sync_api import sync_playwright
+        parsed = urlparse(settings.FRONTEND_URL)
+        cookie_domain = parsed.hostname or "localhost"
+        cookie_secure = parsed.scheme == "https"
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                ctx = browser.new_context()
+                if access_token:
+                    ctx.add_cookies([{
+                        "name": "access_token",
+                        "value": access_token,
+                        "domain": cookie_domain,
+                        "path": "/",
+                        "httpOnly": True,
+                        "secure": cookie_secure,
+                    }])
+                page = ctx.new_page()
+                page.goto(frontend_url, wait_until="networkidle", timeout=30000)
+                page.evaluate("() => { const el = document.querySelector('.print\\\\:hidden'); if(el) el.style.display='none'; }")
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+                )
+                browser.close()
+                return pdf_bytes
+        except Exception as e:
+            print(f"[PDF EMAIL ERROR] {e}")
+            return b""
+
+    pdf_bytes = await asyncio.to_thread(_render_pdf)
+
+    email_success = send_quote_email(ticket.email, quote_data, ticket_data, pdf_bytes)
     
     if not email_success:
         raise HTTPException(status_code=500, detail="Failed to send the email. Please check the STMP Server configuration.")
