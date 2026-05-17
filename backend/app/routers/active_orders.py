@@ -1,7 +1,10 @@
+import asyncio
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
+from sqlalchemy import text
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -12,6 +15,7 @@ from app.models.quote import Quote, QuoteItem, QuoteStatusEnum
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User
 from app.routers.auth import get_current_user
+from app.config import settings
 from app.schemas.delivery import (
     DeliveryAssignmentCreate,
     DeliveryAssignmentPublic,
@@ -61,6 +65,12 @@ async def list_active_orders(
 
     response = []
     for quote, ticket in rows:
+        ops = await db.execute(
+            text("SELECT order_production_status FROM quotes WHERE id = :qid"),
+            {"qid": str(quote.id)},
+        )
+        order_stage = ops.scalar_one_or_none()
+
         items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
         items = items_result.scalars().all()
 
@@ -162,7 +172,7 @@ async def list_active_orders(
                     "quote_no": quote.quote_no,
                     "lpo_no": quote.lpo_no,
                     "status": quote.status.value,
-                    "overall_production_status": _overall_status(items),
+                    "overall_production_status": order_stage if order_stage else _overall_status(items),
                     "items": item_dicts,
                 },
                 "delivery_assignments": assignments,
@@ -191,6 +201,13 @@ async def get_active_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     quote, ticket = row
+
+    ops = await db.execute(
+        text("SELECT order_production_status FROM quotes WHERE id = :qid"),
+        {"qid": str(quote.id)},
+    )
+    order_stage = ops.scalar_one_or_none()
+
     items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
     items = items_result.scalars().all()
 
@@ -289,7 +306,7 @@ async def get_active_order(
             "quote_no": quote.quote_no,
             "lpo_no": quote.lpo_no,
             "status": quote.status.value,
-            "overall_production_status": _overall_status(items),
+            "overall_production_status": order_stage if order_stage else _overall_status(items),
             "items": item_dicts,
         },
         "delivery_assignments": assignments,
@@ -305,7 +322,7 @@ async def update_order_production_status(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Set ALL items on this order to the same production status at once."""
+    """Set the ticket-level order stage only. Does NOT touch individual item statuses."""
     from app.models.quote import ProductionStatusEnum
     result = await db.execute(
         select(Quote, Ticket)
@@ -318,20 +335,29 @@ async def update_order_production_status(
         raise HTTPException(status_code=404, detail="Order not found")
 
     quote, _ = row
-    items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
-    items = items_result.scalars().all()
 
     try:
         new_status = ProductionStatusEnum(data.get("production_status"))
     except (ValueError, KeyError):
         raise HTTPException(status_code=400, detail="Invalid production_status value")
 
-    for item in items:
-        item.production_status = new_status
-        db.add(item)
+    # Order stage cannot be set to COMPLETED unless every item is already COMPLETED.
+    if new_status == ProductionStatusEnum.COMPLETED:
+        items_result = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == quote.id))
+        items = items_result.scalars().all()
+        incomplete = [i for i in items if i.production_status != ProductionStatusEnum.COMPLETED]
+        if incomplete:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{len(incomplete)} item(s) are not yet at Completed status. Mark all items as Completed before setting the order stage to Completed.",
+            )
 
+    await db.execute(
+        text("UPDATE quotes SET order_production_status = :status WHERE id = :qid"),
+        {"status": new_status.value, "qid": str(quote.id)},
+    )
     await db.commit()
-    return {"overall_production_status": new_status.value, "updated_items": len(items)}
+    return {"overall_production_status": new_status.value}
 
 
 @router.post("/tickets/{ticket_id}/mark-complete")
@@ -363,30 +389,90 @@ async def mark_order_complete(
                 detail=f"{len(incomplete)} item(s) are not yet at COMPLETED production status. Update all items before closing the order.",
             )
 
-    # Guard 2: invoice must exist and be SENT or PAID
-    inv_result = await db.execute(
-        select(Invoice)
-        .where(Invoice.ticket_id == ticket.id)
-        .order_by(Invoice.created_at.desc())
-    )
-    invoice = inv_result.scalars().first()
-    if not invoice:
-        raise HTTPException(
-            status_code=400,
-            detail="No invoice found for this order. Generate and send the invoice before completing.",
-        )
-    if invoice.status not in (InvoiceStatusEnum.SENT, InvoiceStatusEnum.PAID):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invoice is currently '{invoice.status.value}'. It must be SENT or PAID before the order can be completed.",
-        )
-
     # All guards passed — close the ticket
     ticket.status = TicketStatusEnum.CLOSED
     ticket.updated_at = datetime.now(timezone.utc)
     db.add(ticket)
     await db.commit()
     return {"message": "Order marked as complete and moved to completed orders"}
+
+
+@router.post("/tickets/{ticket_id}/reactivate")
+async def reactivate_order(
+    ticket_id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.user import UserRole
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only Admins can move orders back to active.")
+        
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.status != TicketStatusEnum.CLOSED:
+        raise HTTPException(status_code=400, detail="Only closed orders can be reactivated")
+    ticket.status = TicketStatusEnum.ACTIVE_ORDER
+    ticket.updated_at = datetime.now(timezone.utc)
+    db.add(ticket)
+    await db.commit()
+    return {"message": "Order reactivated and moved back to active orders"}
+
+
+@router.post("/tickets/{ticket_id}/reset-to-quote")
+async def reset_to_quote_prep(
+    ticket_id: uuid.UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.user import UserRole
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only Admins can reset orders to quote preparation.")
+    
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Wipe Invoices
+    from app.models.invoice import Invoice, InvoiceItem
+    inv_result = await db.execute(select(Invoice).where(Invoice.ticket_id == ticket.id))
+    invoices = inv_result.scalars().all()
+    for inv in invoices:
+        items_res = await db.execute(select(InvoiceItem).where(InvoiceItem.invoice_id == inv.id))
+        for itm in items_res.scalars().all():
+            await db.delete(itm)
+        await db.delete(inv)
+        
+    # Wipe Quotes & Delivery Notes
+    quotes_res = await db.execute(select(Quote).where(Quote.ticket_id == ticket.id))
+    quotes = quotes_res.scalars().all()
+    for q in quotes:
+        notes_res = await db.execute(select(DeliveryNote).where(DeliveryNote.quote_id == q.id))
+        for n in notes_res.scalars().all():
+            n_items = await db.execute(select(DeliveryNoteItem).where(DeliveryNoteItem.delivery_note_id == n.id))
+            for nitm in n_items.scalars().all():
+                await db.delete(nitm)
+            await db.delete(n)
+            
+        ass_res = await db.execute(select(DeliveryAssignment).where(DeliveryAssignment.quote_id == q.id))
+        for a in ass_res.scalars().all():
+            await db.delete(a)
+            
+        q_items = await db.execute(select(QuoteItem).where(QuoteItem.quote_id == q.id))
+        for qi in q_items.scalars().all():
+            await db.delete(qi)
+            
+        await db.delete(q)
+        
+    ticket.status = TicketStatusEnum.IN_QUOTE_PREPARATION
+    ticket.approved_quote_id = None
+    ticket.lpo_number = None
+    ticket.quote_approved_at = None
+    ticket.updated_at = datetime.now(timezone.utc)
+    
+    db.add(ticket)
+    await db.commit()
+    return {"message": "Order reset to Quote Preparation. All related documents deleted."}
 
 
 @router.patch("/items/{item_id}/assign-vendor")
@@ -611,6 +697,7 @@ async def get_delivery_note(
 @router.post("/delivery-notes/{note_id}/send")
 async def send_delivery_note(
     note_id: uuid.UUID,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -645,8 +732,41 @@ async def send_delivery_note(
         ],
     }
 
+    access_token = request.cookies.get("access_token", "")
+    frontend_url = f"{settings.FRONTEND_URL}/dashboard/delivery-notes/{note_id}"
+
+    def _render_note_pdf() -> bytes:
+        from playwright.sync_api import sync_playwright
+        parsed = urlparse(settings.FRONTEND_URL)
+        cookie_domain = parsed.hostname or "localhost"
+        cookie_secure = parsed.scheme == "https"
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                ctx = browser.new_context()
+                if access_token:
+                    ctx.add_cookies([{
+                        "name": "access_token",
+                        "value": access_token,
+                        "domain": cookie_domain,
+                        "path": "/",
+                        "httpOnly": True,
+                        "secure": cookie_secure,
+                    }])
+                page = ctx.new_page()
+                page.goto(frontend_url, wait_until="networkidle", timeout=30000)
+                page.evaluate("() => { document.querySelectorAll('.print\\\\:hidden').forEach(el => el.style.display='none'); }")
+                pdf_bytes = page.pdf(format="A4", print_background=True, margin={"top":"0","right":"0","bottom":"0","left":"0"})
+                browser.close()
+                return pdf_bytes
+        except Exception as e:
+            print(f"[PDF EMAIL ERROR] Delivery note {note_id}: {e}")
+            return b""
+
+    pdf_bytes = await asyncio.to_thread(_render_note_pdf)
+
     from app.services.emails import send_delivery_note_email
-    background_tasks.add_task(send_delivery_note_email, ticket.email, ticket.customer_name, note_data)
+    background_tasks.add_task(send_delivery_note_email, ticket.email, ticket.customer_name, note_data, pdf_bytes)
 
     note.status = DeliveryNoteStatus.SENT
     db.add(note)

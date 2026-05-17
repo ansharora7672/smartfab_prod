@@ -115,11 +115,16 @@ function QuoteResponseContent() {
 
         {/* SmartFab Branding Header */}
         <div className="text-center mb-10">
-          <h1 className="text-2xl font-bold text-[#1E3A8A] tracking-tight">
-            SmartFab Lathe
+          <h1 className="text-[28px] font-black text-[#1E3A8A] tracking-[0.1em] leading-none">
+            SMARTFAB
           </h1>
-          <p className="text-xs text-[#64748B] mt-1 tracking-widest uppercase">
-            Manufacturing Services
+          <div className="flex items-center justify-center my-1">
+            <div className="h-[2px] w-10 bg-[#1E3A8A]" />
+            <span className="mx-2 text-[#1E3A8A] font-extrabold text-base tracking-[0.3em]">LATHE</span>
+            <div className="h-[2px] w-10 bg-[#1E3A8A]" />
+          </div>
+          <p className="text-[10px] text-[#1E3A8A] tracking-[0.08em] uppercase font-bold mt-1">
+            Engineering Accuracy. Crafted in Metal.
           </p>
         </div>
 

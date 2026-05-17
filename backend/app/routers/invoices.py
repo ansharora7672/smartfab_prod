@@ -1,9 +1,11 @@
+import asyncio
 import uuid
 import datetime as dt
 from typing import List, Optional
 from pydantic import BaseModel
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -13,6 +15,7 @@ from app.models.quote import Quote, QuoteStatusEnum
 from app.models.ticket import Ticket, TicketStatusEnum
 from app.models.user import User
 from app.routers.auth import get_current_user
+from app.config import settings
 
 invoices_router = APIRouter(prefix="/admin/invoices", tags=["Invoices"])
 
@@ -195,6 +198,7 @@ async def get_invoice(
 @invoices_router.post("/{invoice_id}/send")
 async def send_invoice(
     invoice_id: uuid.UUID,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -224,8 +228,41 @@ async def send_invoice(
         "phone_number": ticket.phone_number,
     }
 
+    access_token = request.cookies.get("access_token", "")
+    frontend_url = f"{settings.FRONTEND_URL}/dashboard/invoices/{invoice_id}"
+
+    def _render_invoice_pdf() -> bytes:
+        from playwright.sync_api import sync_playwright
+        parsed = urlparse(settings.FRONTEND_URL)
+        cookie_domain = parsed.hostname or "localhost"
+        cookie_secure = parsed.scheme == "https"
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                ctx = browser.new_context()
+                if access_token:
+                    ctx.add_cookies([{
+                        "name": "access_token",
+                        "value": access_token,
+                        "domain": cookie_domain,
+                        "path": "/",
+                        "httpOnly": True,
+                        "secure": cookie_secure,
+                    }])
+                page = ctx.new_page()
+                page.goto(frontend_url, wait_until="networkidle", timeout=30000)
+                page.evaluate("() => { document.querySelectorAll('.print\\\\:hidden').forEach(el => el.style.display='none'); }")
+                pdf_bytes = page.pdf(format="A4", print_background=True, margin={"top":"0","right":"0","bottom":"0","left":"0"})
+                browser.close()
+                return pdf_bytes
+        except Exception as e:
+            print(f"[PDF EMAIL ERROR] Invoice {invoice_id}: {e}")
+            return b""
+
+    pdf_bytes = await asyncio.to_thread(_render_invoice_pdf)
+
     from app.services.emails import send_invoice_email
-    background_tasks.add_task(send_invoice_email, ticket.email, ticket.customer_name, invoice_data, ticket_data)
+    background_tasks.add_task(send_invoice_email, ticket.email, ticket.customer_name, invoice_data, ticket_data, pdf_bytes)
 
     # Mark invoice sent and ticket CLOSED (completed)
     inv.status = InvoiceStatusEnum.SENT

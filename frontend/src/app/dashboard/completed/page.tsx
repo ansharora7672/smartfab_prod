@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Download, Package, Pencil, Search, XCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { ChevronRight, Download, Package, Pencil, RefreshCw, RotateCcw, Search, XCircle, User, Building2, Mail, LayoutGrid, List, Receipt } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -25,6 +26,7 @@ type CompletedTicket = {
   ticket_id: string;
   company_name: string;
   customer_name: string;
+  email: string;
   lpo_number: string | null;
   updated_at: string;
   approved_quote_id: string | null;
@@ -43,12 +45,36 @@ type Tab = "completed" | "declined";
 
 export default function CompletedOrdersPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [tickets, setTickets] = useState<CompletedTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("completed");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [overrideTarget, setOverrideTarget] = useState<{ quoteId: string; ticketId: string } | null>(null);
   const [overriding, setOverriding] = useState(false);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
+
+  const resetToQuote = async (ticketId: string) => {
+    if (!confirm("CRITICAL WARNING:\n\nAre you sure you want to reset this order to Quote Preparation?\n\nThis action will PERMANENTLY DELETE all existing Quotes, Invoices, and Delivery Notes for this order. It will become a fresh ticket waiting for a new quote. Proceed?")) return;
+    setReactivatingId(ticketId);
+    try {
+      const res = await fetch(`${API}/admin/orders/tickets/${ticketId}/reset-to-quote`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || "Failed to reset order");
+      }
+      setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    } catch (err: any) {
+      alert(err.message || "Failed to reset order. Please try again.");
+    } finally {
+      setReactivatingId(null);
+    }
+  };
 
   const STATUS_OPTIONS = [
     { value: "SENT",                   label: "Re-open — Back to Quote Prep" },
@@ -80,12 +106,31 @@ export default function CompletedOrdersPage() {
     }
   };
 
-  useEffect(() => {
+  const loadTickets = () => {
     fetch(`${API}/admin/tickets/completed`, { credentials: "include" })
       .then((r) => r.json())
       .then((data) => setTickets(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  const reactivateOrder = async (ticketId: string) => {
+    if (!confirm("Move this order back to Active Orders?\n\nThis will reopen the order and keep all existing invoices and documents intact. Continue?")) return;
+    setReactivatingId(ticketId);
+    try {
+      const res = await fetch(`${API}/admin/orders/tickets/${ticketId}/reactivate`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to reactivate");
+      setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    } catch {
+      alert("Failed to reactivate order. Please try again.");
+    } finally {
+      setReactivatingId(null);
+    }
+  };
+
+  useEffect(() => { loadTickets(); }, []);
 
   const completedTickets = tickets.filter((t) => t.approved_quote_id != null);
   const declinedTickets = tickets.filter((t) => t.approved_quote_id == null);
@@ -150,71 +195,189 @@ export default function CompletedOrdersPage() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-6 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={tab === "completed" ? "Search by ticket, company, LPO..." : "Search by ticket, company, quote..."}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm text-primary-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
-        />
+      {/* Search & View Toggle */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={tab === "completed" ? "Search by ticket, company, LPO..." : "Search by ticket, company, quote..."}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm text-primary-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+          />
+        </div>
+        <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-border shadow-sm">
+          <button
+            onClick={() => setViewMode("table")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "table" ? "bg-primary-50 text-primary-600 shadow-sm" : "text-muted hover:text-text-primary hover:bg-section-bg"}`}
+            title="Table View"
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode("grid")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-primary-50 text-primary-600 shadow-sm" : "text-muted hover:text-text-primary hover:bg-section-bg"}`}
+            title="Grid View"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white border border-border rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.03)] overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            {tab === "declined" && !search && (
-              <XCircle className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            )}
-            <p className="text-sm text-muted font-medium">
-              {search
-                ? "No orders match your search."
-                : tab === "declined"
-                ? "No declined orders."
-                : "No completed orders yet."}
-            </p>
-          </div>
-        ) : tab === "completed" ? (
-          /* ── Completed Orders Table ── */
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-section-bg/30">
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Order ID</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Company</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">LPO</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Items</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Invoice</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Total</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Completed</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => {
-                const completedDate = new Date(t.updated_at).toLocaleDateString("en-AE", {
-                  day: "2-digit", month: "short", year: "numeric",
-                });
-                const invoiceStyle = t.invoice
-                  ? (INVOICE_STATUS_STYLE[t.invoice.status] ?? "bg-gray-50 border-gray-200 text-gray-600")
-                  : null;
-
-                return (
-                  <tr
-                    key={t.id}
-                    onClick={() => router.push(`/dashboard/completed/${t.id}`)}
-                    className="border-b border-border/40 hover:bg-section-bg/30 cursor-pointer transition-colors group"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-xs font-bold text-primary-900 bg-primary-100/50 px-2 py-1 rounded-md">
+      {viewMode === "grid" && tab === "completed" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.length === 0 ? (
+            <div className="col-span-full py-16 text-center bg-white border border-border rounded-2xl">
+              <p className="text-sm text-muted font-medium">No completed orders yet.</p>
+            </div>
+          ) : (
+            filtered.map((t) => {
+              const completedDate = new Date(t.updated_at).toLocaleDateString("en-AE", { day: "2-digit", month: "short", year: "numeric" });
+              const invoiceStyle = t.invoice ? (INVOICE_STATUS_STYLE[t.invoice.status] ?? "bg-gray-50 border-gray-200 text-gray-600") : "";
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => router.push(`/dashboard/completed/${t.id}`)}
+                  className="group bg-white border border-border rounded-2xl p-6 shadow-[0_2px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_30px_rgba(0,0,0,0.06)] hover:border-primary-200 transition-all duration-300 cursor-pointer flex flex-col relative"
+                >
+                  <div className="absolute top-6 right-6 text-muted opacity-0 group-hover:opacity-100 group-hover:text-primary-600 group-hover:translate-x-1 transition-all">
+                    <ChevronRight className="w-5 h-5" />
+                  </div>
+                  
+                  <div className="mb-4 pr-10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-mono text-[11px] font-bold text-primary-900 bg-primary-50 px-2 py-0.5 rounded uppercase tracking-widest border border-primary-100/50">
                         {t.ticket_id}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-text-primary">{t.company_name}</span>
-                      <span className="block text-xs text-muted">{t.customer_name}</span>
-                    </td>
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      <span className="font-semibold text-sm text-text-primary flex items-center gap-2">
+                        <User className="w-3.5 h-3.5 text-primary-600" /> {t.customer_name}
+                      </span>
+                      <span className="text-xs font-semibold text-text-secondary flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-muted" /> {t.company_name}
+                      </span>
+                      <span className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                        <Mail className="w-3 h-3" /> {t.email}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 py-4 border-y border-border/60 mb-4 text-sm font-medium text-text-secondary">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="w-3.5 h-3.5 text-muted" />
+                      <span className="font-mono text-xs">{t.lpo_number || "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Package className="w-3.5 h-3.5 text-muted" />
+                      <span>{t.item_count} Items</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-muted font-bold tracking-wider uppercase mb-0.5">Invoice</span>
+                      {t.invoice ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-text-secondary">{t.invoice.invoice_no}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${invoiceStyle}`}>{t.invoice.status}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] text-muted font-bold tracking-wider uppercase mb-0.5">Total</span>
+                      <span className="font-semibold text-sm text-text-primary">
+                        {t.invoice ? `AED ${t.invoice.invoice_total.toFixed(2)}` : "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-auto pt-4 border-t border-border/50 flex items-center justify-between">
+                    <span className="text-xs text-muted font-medium">{completedDate}</span>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          title="Reset order to Quote Preparation"
+                          onClick={(e) => { e.stopPropagation(); resetToQuote(t.id); }}
+                          disabled={reactivatingId === t.id}
+                          className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-40"
+                        >
+                          <RotateCcw className={`w-3.5 h-3.5 ${reactivatingId === t.id ? "animate-spin" : ""}`} />
+                        </button>
+                        <button
+                          title="Move back to Active Orders"
+                          onClick={(e) => { e.stopPropagation(); reactivateOrder(t.id); }}
+                          disabled={reactivatingId === t.id}
+                          className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${reactivatingId === t.id ? "animate-spin" : ""}`} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : viewMode === "table" && tab === "completed" ? (
+        <div className="bg-white border border-border rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.03)] overflow-hidden">
+          {filtered.length === 0 ? (
+            <div className="p-12 text-center">
+              <p className="text-sm text-muted font-medium">No completed orders yet.</p>
+            </div>
+          ) : (
+          /* ── Completed Orders Table ── */
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap md:whitespace-normal">
+              <thead>
+                <tr className="border-b border-border bg-section-bg/30">
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Order ID</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Client & Company</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">LPO</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Items</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Invoice</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Total</th>
+                  <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Completed</th>
+                  <th className="px-6 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((t) => {
+                  const completedDate = new Date(t.updated_at).toLocaleDateString("en-AE", {
+                    day: "2-digit", month: "short", year: "numeric",
+                  });
+                  const invoiceStyle = t.invoice
+                    ? (INVOICE_STATUS_STYLE[t.invoice.status] ?? "bg-gray-50 border-gray-200 text-gray-600")
+                    : null;
+
+                  return (
+                    <tr
+                      key={t.id}
+                      onClick={() => router.push(`/dashboard/completed/${t.id}`)}
+                      className="border-b border-border/40 hover:bg-section-bg/30 cursor-pointer transition-colors group"
+                    >
+                      <td className="px-6 py-4">
+                        <span className="font-mono text-xs font-bold text-primary-900 bg-primary-100/50 px-2 py-1 rounded-md">
+                          {t.ticket_id}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-semibold text-sm text-text-primary flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-primary-600" /> {t.customer_name}
+                          </span>
+                          <span className="text-xs font-semibold text-text-secondary flex items-center gap-2">
+                            <Building2 className="w-3.5 h-3.5 text-muted" /> {t.company_name}
+                          </span>
+                          <span className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                            <Mail className="w-3 h-3" /> {t.email}
+                          </span>
+                        </div>
+                      </td>
                     <td className="px-6 py-4 text-xs text-muted font-mono">
                       {t.lpo_number ?? <span className="text-muted">—</span>}
                     </td>
@@ -243,81 +406,28 @@ export default function CompletedOrdersPage() {
                     </td>
                     <td className="px-6 py-4 text-xs text-muted">{completedDate}</td>
                     <td className="px-6 py-4 text-right">
-                      <ChevronRight className="w-4 h-4 text-muted group-hover:text-primary-900 transition-colors ml-auto" />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          /* ── Declined Orders Table ── */
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-section-bg/30">
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Order ID</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Company</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Quote</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Quote Total</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Status</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Declined On</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => {
-                const declinedDate = new Date(t.updated_at).toLocaleDateString("en-AE", {
-                  day: "2-digit", month: "short", year: "numeric",
-                });
-
-                return (
-                  <tr
-                    key={t.id}
-                    className="border-b border-border/40 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-xs font-bold text-primary-900 bg-primary-100/50 px-2 py-1 rounded-md">
-                        {t.ticket_id}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-text-primary">{t.company_name}</span>
-                      <span className="block text-xs text-muted">{t.customer_name}</span>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-mono text-text-secondary">
-                      {t.declined_quote?.quote_no ?? <span className="text-muted">—</span>}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-semibold text-text-primary">
-                      {t.declined_quote
-                        ? `AED ${t.declined_quote.quote_total.toFixed(2)}`
-                        : <span className="text-muted font-normal">—</span>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-50 border-red-200 text-red-600">
-                        DECLINED
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-muted">{declinedDate}</td>
-                    <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {t.declined_quote && (
-                          <button
-                            title="Download Quote PDF"
-                            onClick={() => window.location.href = `${API}/admin/quotes/${t.declined_quote!.id}/download`}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 text-muted hover:text-primary-900 transition-colors"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              title="Reset order to Quote Preparation (Deletes all documents)"
+                              onClick={(e) => { e.stopPropagation(); resetToQuote(t.id); }}
+                              disabled={reactivatingId === t.id}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted hover:text-red-600 transition-colors disabled:opacity-40"
+                            >
+                              <RotateCcw className={`w-3.5 h-3.5 ${reactivatingId === t.id ? "animate-spin" : ""}`} />
+                            </button>
+                            <button
+                              title="Move back to Active Orders (Keeps documents intact)"
+                              onClick={(e) => { e.stopPropagation(); reactivateOrder(t.id); }}
+                              disabled={reactivatingId === t.id}
+                              className="p-1.5 rounded-lg hover:bg-amber-50 text-muted hover:text-amber-700 transition-colors disabled:opacity-40"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${reactivatingId === t.id ? "animate-spin" : ""}`} />
+                            </button>
+                          </>
                         )}
-                        {t.declined_quote && (
-                          <button
-                            title="Change Status"
-                            onClick={() => setOverrideTarget({ quoteId: t.declined_quote!.id, ticketId: t.id })}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 text-muted hover:text-primary-900 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <ChevronRight className="w-4 h-4 text-muted group-hover:text-primary-900 transition-colors" />
                       </div>
                     </td>
                   </tr>
@@ -325,8 +435,105 @@ export default function CompletedOrdersPage() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+          </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white border border-border rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.03)] overflow-hidden">
+          {filtered.length === 0 ? (
+            <div className="p-12 text-center">
+              <XCircle className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-muted font-medium">No declined orders.</p>
+            </div>
+          ) : (
+            /* ── Declined Orders Table ── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap md:whitespace-normal">
+                <thead>
+                  <tr className="border-b border-border bg-section-bg/30">
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Order ID</th>
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Client & Company</th>
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Quote</th>
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Quote Total</th>
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-3 text-[11px] font-bold text-muted uppercase tracking-widest">Declined On</th>
+                    <th className="px-6 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((t) => {
+                    const declinedDate = new Date(t.updated_at).toLocaleDateString("en-AE", {
+                      day: "2-digit", month: "short", year: "numeric",
+                    });
+
+                    return (
+                      <tr
+                        key={t.id}
+                        className="border-b border-border/40 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-xs font-bold text-primary-900 bg-primary-100/50 px-2 py-1 rounded-md">
+                            {t.ticket_id}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="font-semibold text-sm text-text-primary flex items-center gap-2">
+                              <User className="w-3.5 h-3.5 text-primary-600" /> {t.customer_name}
+                            </span>
+                            <span className="text-xs font-semibold text-text-secondary flex items-center gap-2">
+                              <Building2 className="w-3.5 h-3.5 text-muted" /> {t.company_name}
+                            </span>
+                            <span className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                              <Mail className="w-3 h-3" /> {t.email}
+                            </span>
+                          </div>
+                        </td>
+                      <td className="px-6 py-4 text-xs font-mono text-text-secondary">
+                        {t.declined_quote?.quote_no ?? <span className="text-muted">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-semibold text-text-primary">
+                        {t.declined_quote
+                          ? `AED ${t.declined_quote.quote_total.toFixed(2)}`
+                          : <span className="text-muted font-normal">—</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-red-50 border-red-200 text-red-600">
+                          DECLINED
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-muted">{declinedDate}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {t.declined_quote && (
+                            <button
+                              title="Download Quote PDF"
+                              onClick={() => window.location.href = `${API}/admin/quotes/${t.declined_quote!.id}/download`}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-muted hover:text-primary-900 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {t.declined_quote && (
+                            <button
+                              title="Change Status"
+                              onClick={() => setOverrideTarget({ quoteId: t.declined_quote!.id, ticketId: t.id })}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-muted hover:text-primary-900 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Override Status Modal */}
       {overrideTarget && (

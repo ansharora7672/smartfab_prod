@@ -29,6 +29,7 @@ export default function QuotePDFView() {
   const STATUS_OPTIONS = [
     { value: "SENT",                   label: "Re-open — Back to Quote Prep" },
     { value: "APPROVED",               label: "Mark as Approved → Active Orders" },
+    { value: "MARK_COMPLETE",          label: "Mark as Completed → Completed Orders" },
     { value: "MODIFICATION_REQUESTED", label: "Mark as Changes Requested" },
     { value: "REJECTED",               label: "Mark as Declined" },
   ];
@@ -37,8 +38,31 @@ export default function QuotePDFView() {
     setOverriding(true);
     setStatusMenuOpen(false);
     try {
+      const API = process.env.NEXT_PUBLIC_API_URL;
+
+      if (newStatus === "MARK_COMPLETE") {
+        // Step 1: set quote to APPROVED so ticket becomes ACTIVE_ORDER
+        const approveRes = await fetch(`${API}/admin/quotes/${quote_id}/override-status`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_status: "APPROVED" }),
+        });
+        if (!approveRes.ok) throw new Error("Failed to approve order");
+
+        // Step 2: mark the ticket as complete (ACTIVE_ORDER → CLOSED)
+        const completeRes = await fetch(`${API}/admin/orders/tickets/${quote.ticket_id}/mark-complete`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (!completeRes.ok) throw new Error("Failed to mark order complete");
+
+        router.push("/dashboard/completed");
+        return;
+      }
+
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/quotes/${quote_id}/override-status`,
+        `${API}/admin/quotes/${quote_id}/override-status`,
         {
           method: "PATCH",
           credentials: "include",
@@ -50,8 +74,8 @@ export default function QuotePDFView() {
       const data = await res.json();
       setQuote({ ...quote, status: data.new_quote_status });
       setFeedback({ type: "success", message: `Status updated to ${data.new_quote_status}` });
-    } catch {
-      setFeedback({ type: "error", message: "Failed to update status." });
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Failed to update status." });
     } finally {
       setOverriding(false);
     }
@@ -188,7 +212,7 @@ export default function QuotePDFView() {
         <div className="flex w-full mb-2 relative z-20 items-center justify-between">
             {/* Logo scaled up visually to keep the container layout untouched */}
             <div className="w-[180px] h-[180px] shrink-0 relative ml-1 scale-[1.25]">
-                 <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" layout="fill" objectFit="contain" priority />
+                 <Image src="/SmartFab_FinalLogo.png" alt="SmartFab Logo" fill className="object-contain" priority />
             </div>
             
             {/* Centered Massive Text */}
@@ -323,7 +347,7 @@ export default function QuotePDFView() {
              {/* Image container firmly placed right above the span line */}
              <div className="flex w-full pl-[40px] -mb-[15px] relative z-10 mix-blend-multiply">
                  <div className="relative w-[200px] h-[80px]">
-                    <Image src="/signature.png" alt="" layout="fill" objectFit="contain" priority unoptimized />
+                    <Image src="/signature.png" alt="" fill className="object-contain" priority unoptimized />
                  </div>
              </div>
              <div className="flex items-end gap-2 relative z-0">

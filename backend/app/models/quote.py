@@ -29,25 +29,33 @@ class Quote(SQLModel, table=True):
     __tablename__ = "quotes"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    
+
     # Links to the Consultation Ticket
     ticket_id: uuid.UUID = Field(foreign_key="tickets.id", index=True, nullable=False)
-    
+
     # Official Quote Reference / Order No
     quote_no: str = Field(index=True, unique=True, nullable=False)
-    
+
     # --- PDF Header Fields based on SmartFab_Quotation.pdf ---
     company_name: str
     address: str
     phone_no: str
     quote_date: dt.date = Field(default_factory=dt.date.today)
-    
+
     # LPO might be empty initially, filled when client sends it
     lpo_no: Optional[str] = Field(default="")
     lead_time_approx: str = Field(default="")
-    
+
     # Status & Timestamps
     status: QuoteStatusEnum = Field(default=QuoteStatusEnum.DRAFT)
+
+    # Ticket-level production stage — set explicitly by admin via "Order Stage" dropdown.
+    # Stored as plain VARCHAR to avoid SQLModel enum-mapping issues with the ALTER TABLE column.
+    # NULL means not yet set; endpoints fall back to computing from items in that case.
+    order_production_status: Optional[str] = Field(
+        default=None,
+        sa_column=Column(sa.String, nullable=True)
+    )
     
     created_at: dt.datetime = Field(
         default_factory=lambda: dt.datetime.now(dt.timezone.utc),

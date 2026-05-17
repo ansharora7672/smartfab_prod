@@ -18,6 +18,48 @@ interface InvoiceItem {
   total_incl_vat: number;
 }
 
+function numberToWords(amount: number): string {
+  if (amount <= 0) return "";
+  const ones = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+    "Seventeen", "Eighteen", "Nineteen",
+  ];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function convertHundreds(n: number): string {
+    let r = "";
+    if (n >= 100) { r += ones[Math.floor(n / 100)] + " Hundred "; n %= 100; }
+    if (n >= 20) { r += tens[Math.floor(n / 10)] + " "; n %= 10; }
+    if (n > 0) r += ones[n] + " ";
+    return r.trim();
+  }
+
+  function convertNumber(n: number): string {
+    if (n === 0) return "";
+    const scales = ["", "Thousand", "Million", "Billion"];
+    const parts: string[] = [];
+    let i = 0;
+    while (n > 0) {
+      const chunk = n % 1000;
+      if (chunk !== 0) {
+        const w = convertHundreds(chunk);
+        parts.unshift(scales[i] ? `${w} ${scales[i]}` : w);
+      }
+      n = Math.floor(n / 1000);
+      i++;
+    }
+    return parts.join(" ");
+  }
+
+  const rounded = Math.round(amount * 100) / 100;
+  const intPart = Math.floor(rounded);
+  const decPart = Math.round((rounded - intPart) * 100);
+  let result = `AED ${convertNumber(intPart)}`;
+  if (decPart > 0) result += ` and ${convertNumber(decPart)} Fils`;
+  return result + " Only";
+}
+
 const emptyItem = (sr_no: number): InvoiceItem => ({
   sr_no,
   description_of_service: "",
@@ -153,6 +195,10 @@ export default function NewInvoicePage() {
   const taxableValue = +items.reduce((s, i) => s + i.amount, 0).toFixed(2);
   const vatTotal = +items.reduce((s, i) => s + (i.amount * i.vat_percentage / 100), 0).toFixed(2);
   const invoiceTotal = +(taxableValue + vatTotal).toFixed(2);
+
+  useEffect(() => {
+    setAmountWords(numberToWords(invoiceTotal));
+  }, [invoiceTotal]);
 
   const handleSave = async () => {
     setSaving(true);

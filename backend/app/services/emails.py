@@ -27,7 +27,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
-from app.services.pdf_generator import generate_quote_pdf, generate_delivery_note_pdf, generate_invoice_pdf
 
 from app.config import settings
 
@@ -62,8 +61,17 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
     html_body = f"""
     <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Operations Platform</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
@@ -71,7 +79,7 @@ def send_welcome_email(to_email: str, full_name: str, temp_password: str) -> boo
                 Hi <strong>{full_name}</strong>,
             </p>
             <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 24px 0;">
-                Your account has been created on the SmartFab Lathe platform. 
+                Your account has been created on the SmartFab Lathe platform.
                 Use the temporary password below to log in. You will be asked to change it on first login.
             </p>
 
@@ -148,8 +156,17 @@ def send_password_reset_email(to_email: str, full_name: str, temp_password: str)
     html_body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Operations Platform</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 12px; padding: 32px; margin-bottom: 24px;">
@@ -215,10 +232,26 @@ def send_ticket_lifecycle_notification(to_email: str, notification_type: str, co
     user = context.get("user")
     ticket = context.get("ticket")
     
+    _brand_header = """
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        </div>"""
+
     if notification_type == "NEW_TICKET_ALERT":
         subject = f"New Consultation Request: {ticket.ticket_id}"
         html_body = f"""
         <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            {_brand_header}
             <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
                 <p>Hi <strong>{user.full_name}</strong>,</p>
                 <p>A new customer has just requested a quote and scheduled a consultation.</p>
@@ -229,11 +262,12 @@ def send_ticket_lifecycle_notification(to_email: str, notification_type: str, co
             </div>
         </div>
         """
-        
+
     elif notification_type == "ASSIGNED":
         subject = f"New Consultation Assigned: {ticket.ticket_id}"
         html_body = f"""
         <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            {_brand_header}
             <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
                 <p>Hi <strong>{user.full_name}</strong>,</p>
                 <p>You have been automatically assigned to handle an upcoming consultation call.</p>
@@ -243,11 +277,12 @@ def send_ticket_lifecycle_notification(to_email: str, notification_type: str, co
             </div>
         </div>
         """
-        
+
     elif notification_type == "UPCOMING_REMINDER":
         subject = f"Reminder: Upcoming Consultation {ticket.ticket_id} in 1 Hour!"
         html_body = f"""
         <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            {_brand_header}
             <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
                 <p>Hi <strong>{user.full_name}</strong>,</p>
                 <p>Friendly reminder that your consultation call for <strong>{ticket.ticket_id}</strong> is coming up in approximately 1 hour.</p>
@@ -256,11 +291,12 @@ def send_ticket_lifecycle_notification(to_email: str, notification_type: str, co
             </div>
         </div>
         """
-        
+
     elif notification_type == "CALL_COMPLETED_PROMPT":
         subject = f"Action Required: Complete Consultation {ticket.ticket_id}"
         html_body = f"""
         <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+            {_brand_header}
             <div style="background: #FEF3C7; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px;">
                 <p>Hi <strong>{user.full_name}</strong>,</p>
                 <p>The scheduled time for ticket <strong>{ticket.ticket_id}</strong> has passed.</p>
@@ -291,7 +327,7 @@ def send_ticket_lifecycle_notification(to_email: str, notification_type: str, co
         return False
 
 
-def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool:
+def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict, pdf_bytes: bytes = b"") -> bool:
     """
     Sends the generated quote to the customer via email.
     
@@ -437,29 +473,21 @@ def send_quote_email(to_email: str, quote_data: dict, ticket_data: dict) -> bool
     """
 
     try:
-        # 1. Generate the actual PDF file as raw bytes
-        pdf_bytes = generate_quote_pdf(quote_data, ticket_data)
-        
-        # 2. Build the email — use "mixed" type to support both HTML body AND file attachment
-        #    "alternative" = only HTML or text (no attachments)
-        #    "mixed"       = HTML body + file attachments together
         msg = MIMEMultipart("mixed")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Quote {quote_no} - SmartFab Lathe Manufacturing Services"
-        
-        # Attach the HTML body (the email text the customer sees)
+        msg["Subject"] = f"Quote {quote_no} - SmartFab Lathe"
         msg.attach(MIMEText(html_body, "html"))
-        
-        # 3. Attach the PDF file
+
         if pdf_bytes:
+            safe_no = quote_no.replace("/", "-")
+            pdf_filename = f"Quote-{safe_no}.pdf"
             pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
-            pdf_filename = f"SmartFab_Quote_{quote_no}.pdf"
             pdf_attachment.add_header("Content-Disposition", "attachment", filename=pdf_filename)
             msg.attach(pdf_attachment)
-            print(f"  [PDF] Generated {len(pdf_bytes)} bytes for {pdf_filename}")
+            print(f"  [PDF] Attached {len(pdf_bytes)} bytes as {pdf_filename}")
         else:
-            print(f"  [PDF WARNING] PDF generation failed for {quote_no}, sending without attachment")
+            print(f"  [PDF WARNING] No PDF bytes for {quote_no}, sending without attachment")
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
             server.login(settings.SMTP_EMAIL, settings.SMTP_APP_PASSWORD)
@@ -574,8 +602,17 @@ def send_rejection_followup_email(to_email: str, customer_name: str, invoice_no:
     html_body = f"""
     <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Services</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
@@ -636,8 +673,17 @@ def send_modification_followup_email(to_email: str, customer_name: str, invoice_
     html_body = f"""
     <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
         <div style="text-align: center; margin-bottom: 32px;">
-            <h1 style="font-size: 22px; font-weight: 700; color: #1E3A8A; margin: 0;">SmartFab Lathe</h1>
-            <p style="font-size: 12px; color: #64748B; margin-top: 4px;">Manufacturing Services</p>
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <div style="background: #FEF3C7; border: 1px solid rgba(245,158,11,0.2); border-radius: 16px; padding: 32px; margin-bottom: 24px;">
@@ -702,6 +748,19 @@ def send_staff_quote_response_notification(
 
     html_body = f"""
     <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 24px; color: #0F172A;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        </div>
         <div style="background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
             <p style="font-size: 15px; color: #334155; margin: 0 0 12px 0;">
                 Hi <strong>{staff_name}</strong>,
@@ -746,7 +805,7 @@ def send_staff_quote_response_notification(
 # =============================================================================
 # VENDOR RFQ EMAIL
 # =============================================================================
-def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict) -> bool:
+def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict, pdf_bytes: bytes = b"") -> bool:
     note_no = note_data.get("note_no", "")
     version = note_data.get("version", 1)
     company_name = note_data.get("company_name", "")
@@ -768,10 +827,18 @@ def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict)
 
     html_body = f"""
     <div style="font-family:'Inter',Arial,sans-serif;max-width:640px;margin:0 auto;padding:40px 24px;color:#0F172A;background:#FFFFFF;">
-        <div style="text-align:center;margin-bottom:32px;">
-            <h1 style="color:#1E3A8A;font-size:28px;font-weight:900;margin:0;letter-spacing:2px;">SMARTFAB</h1>
-            <p style="color:#1E3A8A;font-weight:800;font-size:14px;letter-spacing:5px;margin:4px 0;">LATHE</p>
-            <p style="font-size:10px;color:#1E3A8A;margin-top:4px;letter-spacing:1px;font-weight:700;text-transform:uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
 
         <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:16px;padding:32px;margin-bottom:24px;">
@@ -813,8 +880,6 @@ def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict)
     """
 
     try:
-        pdf_bytes = generate_delivery_note_pdf(note_data)
-
         msg = MIMEMultipart("mixed")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
@@ -822,8 +887,9 @@ def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict)
         msg.attach(MIMEText(html_body, "html"))
 
         if pdf_bytes:
+            safe_no = note_no.replace("/", "-")
             pdf_att = MIMEApplication(pdf_bytes, _subtype="pdf")
-            pdf_att.add_header("Content-Disposition", "attachment", filename=f"SmartFab_DeliveryNote_{note_no}.pdf")
+            pdf_att.add_header("Content-Disposition", "attachment", filename=f"DeliveryNote-{safe_no}.pdf")
             msg.attach(pdf_att)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -837,17 +903,25 @@ def send_delivery_note_email(to_email: str, customer_name: str, note_data: dict)
         return False
 
 
-def send_invoice_email(to_email: str, customer_name: str, invoice_data: dict, ticket_data: dict) -> bool:
+def send_invoice_email(to_email: str, customer_name: str, invoice_data: dict, ticket_data: dict, pdf_bytes: bytes = b"") -> bool:
     invoice_no = invoice_data.get("invoice_no", "")
     company_name = ticket_data.get("company_name", "")
     invoice_total = invoice_data.get("invoice_total", 0)
 
     html_body = f"""
     <div style="font-family:'Inter',Arial,sans-serif;max-width:640px;margin:0 auto;padding:40px 24px;color:#0F172A;background:#FFFFFF;">
-        <div style="text-align:center;margin-bottom:32px;">
-            <h1 style="color:#1E3A8A;font-size:28px;font-weight:900;margin:0;letter-spacing:2px;">SMARTFAB</h1>
-            <p style="color:#1E3A8A;font-weight:800;font-size:14px;letter-spacing:5px;margin:4px 0;">LATHE</p>
-            <p style="font-size:10px;color:#1E3A8A;margin-top:4px;letter-spacing:1px;font-weight:700;text-transform:uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+            <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+                </div>
+                <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+                <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                   <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+                </div>
+            </div>
+            <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
         </div>
         <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:16px;padding:32px;margin-bottom:24px;">
             <p style="font-size:15px;color:#334155;margin:0 0 8px 0;">Dear <strong>{customer_name}</strong>,</p>
@@ -874,8 +948,6 @@ def send_invoice_email(to_email: str, customer_name: str, invoice_data: dict, ti
     """
 
     try:
-        pdf_bytes = generate_invoice_pdf(invoice_data, ticket_data)
-
         msg = MIMEMultipart("mixed")
         msg["From"] = f"SmartFab Lathe <{settings.SMTP_EMAIL}>"
         msg["To"] = to_email
@@ -883,8 +955,9 @@ def send_invoice_email(to_email: str, customer_name: str, invoice_data: dict, ti
         msg.attach(MIMEText(html_body, "html"))
 
         if pdf_bytes:
+            safe_no = invoice_no.replace("/", "-")
             pdf_att = MIMEApplication(pdf_bytes, _subtype="pdf")
-            pdf_att.add_header("Content-Disposition", "attachment", filename=f"SmartFab_Invoice_{invoice_no}.pdf")
+            pdf_att.add_header("Content-Disposition", "attachment", filename=f"Invoice-{safe_no}.pdf")
             msg.attach(pdf_att)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
@@ -909,8 +982,20 @@ def send_vendor_inquiry_email(
     message: str,
 ) -> bool:
     html_body = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color:#0F172A;">
-      <h2 style="color:#1E3A8A;">SmartFab Lathe — Vendor Inquiry</h2>
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 40px 24px; color:#0F172A;">
+      <div style="text-align: center; margin-bottom: 32px;">
+          <h1 style="color: #1E3A8A; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: 2px;">SMARTFAB</h1>
+          <div style="margin: 4px 0; color: #1E3A8A; font-weight: 800; display: table; width: 100%;">
+              <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                 <div style="height: 2px; background-color: #1E3A8A; float: right; width: 40px; margin-right: 8px;"></div>
+              </div>
+              <div style="display: table-cell; white-space: nowrap; letter-spacing: 5px; font-size: 16px;">LATHE</div>
+              <div style="display: table-cell; width: 50%; vertical-align: middle;">
+                 <div style="height: 2px; background-color: #1E3A8A; float: left; width: 40px; margin-left: 8px;"></div>
+              </div>
+          </div>
+          <p style="font-size: 10px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">Engineering Accuracy. Crafted in Metal.</p>
+      </div>
       <p>Hi <strong>{vendor_name}</strong>,</p>
       <p>We would like to request your price quote for the following:</p>
       <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">

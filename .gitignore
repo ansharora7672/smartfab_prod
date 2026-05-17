@@ -31,7 +31,13 @@ Thumbs.db
 # ========================
 # Misc
 # ========================
-*.log                 
+*.log
 
 .claude
 .PVS-Studio
+
+# Deployment notes contain secrets — keep off GitHub
+DEPLOYMENT_CHECKLIST.md
+
+# TypeScript incremental build cache
+frontend/tsconfig.tsbuildinfo

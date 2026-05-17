@@ -25,7 +25,7 @@ export default function Footer() {
                 className="object-contain"
 
               />
-              <div className="flex flex-col leading-none">
+              <div className="flex flex-col items-center leading-none">
                 <span className="font-heading font-bold text-base tracking-[0.2em]">
                   SMARTFAB
                 </span>
